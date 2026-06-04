@@ -1,0 +1,89 @@
+# Animated GUI
+
+Minecraft's menus are *instant*. Items teleport between slots, the hotbar selector snaps from one slot to the
+next, chat messages pop in, the creative inventory scrolls a whole page at a time, and screens blink open and
+shut. **Animated GUI** replaces all of that with smooth, framerate-independent motion — and lets you tune the
+style, speed and easing curve of every single one from a flat, Sodium-inspired settings screen.
+
+> Fabric · Minecraft **26.1.2** · client-side only · by **dev-limucc**
+
+---
+
+## Features
+
+| Animation | What it does |
+| --- | --- |
+| **Chat** | New messages slide up from below and the older lines glide up with them, instead of hard-popping. |
+| **Item move** | When a stack moves between slots (shift-click, quick-move, crafting, sorting), the icon glides from its old slot to the new one instead of teleporting. |
+| **Creative scroll** | The creative inventory's row-at-a-time "paging" is replaced with a smooth eased scroll that cascades row by row as you spin the wheel. |
+| **Hotbar** | The selection box slides between hotbar slots instead of snapping (and snaps cleanly on the 8↔0 wrap, rather than sweeping the whole bar). |
+| **Menu open / close** | Inventories, the pause menu and other screens scale or slide in when opened — and, thanks to a deferred close, animate *out* when closed too. |
+
+Every feature has its **own** enable toggle, **duration** (ms) and **easing curve**; screens additionally pick a
+**movement style**. There's a master switch to freeze everything back to vanilla in one click.
+
+### Easing curves
+`Linear` · `Smooth` (sine) · `Ease-out` · `Ease-in-out` · `Overshoot` (back) · `Elastic` · `Bounce`
+
+Pick `Overshoot` or `Elastic` on **Menu open** with the `Scale` style for a satisfying pop.
+
+### Screen styles
+`Scale` · `Slide up` · `Slide down` · `Slide left` · `Slide right`
+
+---
+
+## Settings
+
+Open the **ModMenu** mod list → **Animated GUI** → cog. Everything is hit-tested and drawn by hand in the Limucc
+flat UI style (dark translucent panel, accent-blue hover). Settings are saved to `config/animatedgui.json`.
+
+```jsonc
+{
+  "masterEnabled": true,
+  "chat":          { "enabled": true, "durationMs": 220, "easing": "EASE_OUT" },
+  "items":         { "enabled": true, "durationMs": 200, "easing": "EASE_OUT" },
+  "creativeScroll":{ "enabled": true, "durationMs": 250, "easing": "EASE_OUT" },
+  "hotbar":        { "enabled": true, "durationMs": 150, "easing": "EASE_OUT" },
+  "screenOpen":    { "enabled": true, "durationMs": 240, "easing": "BACK",       "style": "SCALE" },
+  "screenClose":   { "enabled": true, "durationMs": 170, "easing": "EASE_IN_OUT","style": "SCALE" }
+}
+```
+
+---
+
+## How it works
+
+All motion is driven by wall-clock time (so it's smooth at any framerate) and routed through a single
+retargetable [`Tween`](src/client/java/dev/limucc/animatedgui/client/anim/Tween.java): when a target changes
+mid-animation the curve re-anchors at the current value, so nothing ever jumps.
+
+The animations hook MC 26.1.2's deferred `GuiGraphicsExtractor` / `extractRenderState` render pipeline via Mixin:
+
+- **Chat** — translate the chat pose down by the just-added line(s) and ease back to 0.
+- **Hotbar** — recover the per-slot base from the selection sprite's x and re-place it with an eased "animated slot".
+- **Creative** — keep a display scroll value that eases toward `scrollOffs` and re-issue `scrollTo` each frame.
+- **Items** — diff the container's slots each frame, pair an emptied "source" with a filled "destination" of the same item, and offset the destination icon back toward the source.
+- **Screens** — start an open timer on `Screen.added()`, wrap the content render with a scale/slide pose transform, and **defer** `setScreen(null)` so the outgoing screen survives long enough to animate out.
+
+> **Note:** *Item move* and *Menu close* are best-effort by nature (stacking/crafting read as moves, which looks
+> natural; close is deferred by a few frames). All animations degrade gracefully to vanilla if disabled.
+
+---
+
+## Building
+
+Requires JDK 25.
+
+```bash
+./gradlew build
+# -> build/libs/animated-gui-1.0.0.jar
+```
+
+Drop the jar (plus [Fabric API](https://modrinth.com/mod/fabric-api) and, for the settings screen,
+[ModMenu](https://modrinth.com/mod/modmenu)) into your `mods/` folder.
+
+---
+
+## License
+
+MIT © dev-limucc — reuse freely.

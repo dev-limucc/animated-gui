@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "animatedgui",
+  "version": "${version}",
+  "name": "Animated GUI",
+  "description": "Adds smooth, fully customizable animations to Minecraft's instant GUI: chat messages slide in, item stacks glide between slots, the creative menu scrolls smoothly, the hotbar selector slides, and inventory/pause screens fade & scale on open and close. Every animation has its own style, speed and easing curve, tuned from a flat Sodium-style settings screen.",
+  "authors": ["dev-limucc"],
+  "contact": {
+    "homepage": "https://github.com/dev-limucc/animated-gui",
+    "sources": "https://github.com/dev-limucc/animated-gui",
+    "issues": "https://github.com/dev-limucc/animated-gui/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/animatedgui/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "main":   ["dev.limucc.animatedgui.AnimatedGui"],
+    "client": ["dev.limucc.animatedgui.client.AnimatedGuiClient"],
+    "modmenu": ["dev.limucc.animatedgui.client.ModMenuIntegration"]
+  },
+  "mixins": [
+    {
+      "config": "animated-gui.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "~26.1",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}
