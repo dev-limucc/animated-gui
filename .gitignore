@@ -1,0 +1,23 @@
+# gradle / loom
+.gradle/
+build/
+out/
+run/
+remappedSrc/
+
+# decompiled MC reference (local only)
+_mcsrc/
+gensources.log
+runclient.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+eclipse/
+
+# os
+*.DS_Store
