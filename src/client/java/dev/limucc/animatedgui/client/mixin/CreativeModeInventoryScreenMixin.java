@@ -5,10 +5,9 @@ import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
 import net.minecraft.util.Util;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen.ItemPickerMenu;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -30,8 +29,6 @@ public abstract class CreativeModeInventoryScreenMixin {
     @Shadow private boolean scrolling;
 
     @Shadow private boolean canScroll() { throw new AssertionError(); }
-
-    @Shadow @Final protected AbstractContainerMenu menu;
 
     @Unique private final Tween animatedgui$scroll = new Tween();
     @Unique private float animatedgui$lastTarget = Float.NaN;
@@ -62,8 +59,14 @@ public abstract class CreativeModeInventoryScreenMixin {
 
         float display = animatedgui$scroll.update(now);
         if (Float.isNaN(animatedgui$lastDisplay) || Math.abs(display - animatedgui$lastDisplay) > 1.0e-4f) {
-            ((ItemPickerMenu) this.menu).scrollTo(display);
+            animatedgui$menu().scrollTo(display);
             animatedgui$lastDisplay = display;
         }
+    }
+
+    /** The creative grid menu, reached via the public accessor (the {@code menu} field lives in the superclass). */
+    @Unique
+    private ItemPickerMenu animatedgui$menu() {
+        return (ItemPickerMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
     }
 }
