@@ -6,6 +6,8 @@ import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+// MenuTransition is in this same package (dev.limucc.animatedgui.client.anim) — no import needed.
 
 /**
  * Drives screen open/close animations and, crucially, the <em>deferred close</em>: when the user closes an
@@ -29,26 +31,47 @@ public final class ScreenAnimController {
     private static boolean performingRealClose;
     /** The screen to switch to once the outgoing screen has finished animating away (may be null = gameplay). */
     private static Screen pendingNext;
+    /** This deferred close is a menu→menu navigation (drives which transition the outgoing menu uses to exit). */
+    private static boolean menuToMenu;
+    /** Carried across the swap: the transition whose <em>enter</em> motion the incoming menu should play in with. */
+    private static MenuTransition pendingEnterTransition;
+    /** While set, this freshly-opened menu animates in with {@link #openTransition}'s enter motion. */
+    private static MenuTransition openTransition;
+    private static Screen openTransitionScreen;
     /**
      * True only while a screen's open/close pose transform is on the stack. The graphics mixin reads this to
      * also drag the 3D entity render (the inventory player model) along with the transform — it's a
      * picture-in-picture that otherwise ignores the 2D pose.
      */
     public static boolean transformActive;
+    /**
+     * Global opacity multiplier (0..1) applied to the closing/opening menu's draws while a FADE-style transition
+     * is on the stack. 1.0 = fully opaque (no fade). Read by the graphics mixin to tint every fill/blit/text.
+     */
+    public static float fadeAlpha = 1.0f;
 
     /** Screens we leave alone — the chat input bar shouldn't scale/slide. */
     public static boolean animatable(Screen s) {
         return s != null && !(s instanceof ChatScreen);
     }
 
-    /** From {@code Screen.added()}: a screen just became active — begin its open animation. */
+    /** From {@code Minecraft.setScreen}: a screen just became active — begin its open animation. */
     public static void onScreenAdded(Screen s) {
         if (performingRealClose) return;
-        if (!animatable(s)) { openScreen = null; return; }
+        if (!animatable(s)) { openScreen = null; openTransition = null; openTransitionScreen = null; return; }
         openScreen = s;
         openStartMs = Util.getMillis();
         closing = false;
         closingScreen = null;
+        // Menu→menu navigation: the incoming menu plays the transition's enter motion instead of its open style.
+        if (pendingEnterTransition != null) {
+            openTransition = pendingEnterTransition;
+            openTransitionScreen = s;
+            pendingEnterTransition = null;
+        } else {
+            openTransition = null;
+            openTransitionScreen = null;
+        }
     }
 
     /**
@@ -59,17 +82,29 @@ public final class ScreenAnimController {
      */
     public static boolean interceptClose(Minecraft mc, Screen current, Screen next) {
         if (performingRealClose) { performingRealClose = false; return false; }
-        AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenClose;
-        if (!cfg.on()) return false;
+        if (!closeConfig(current).on()) return false;
         if (closing) return false;                            // already animating one out
         if (!animatable(current) || next == current) return false;
         if (isTransient(current) || isTransient(next)) return false; // don't hold/delay system screens
         // Closing to gameplay: don't animate during death/respawn.
         if (next == null && mc.level != null && (mc.player == null || mc.player.isDeadOrDying())) return false;
+
+        boolean menuNav = next != null && animatable(next) && !isTransient(next)
+                && !(current instanceof AbstractContainerScreen) && !(next instanceof AbstractContainerScreen);
+        MenuTransition tr = AnimConfigManager.get().menuTransition;
+        if (menuNav && !tr.deferOld()) {
+            // SWAP: don't hold the old menu — let setScreen go through, but still play the new menu's enter.
+            pendingEnterTransition = tr;
+            return false;
+        }
+
         pendingNext = next;
         closing = true;
         closingScreen = current;
         closeStartMs = Util.getMillis();
+        menuToMenu = menuNav;
+        // The incoming menu (drawn only after the swap) will play this transition's enter motion.
+        pendingEnterTransition = menuNav ? tr : null;
         return true;
     }
 
@@ -77,16 +112,27 @@ public final class ScreenAnimController {
     public static void tick(Minecraft mc) {
         if (!closing) return;
         if (mc.screen != closingScreen) { closing = false; closingScreen = null; pendingNext = null; return; }
-        AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenClose;
+        AnimConfig.ScreenFeature cfg = closeConfig(closingScreen);
         if (Util.getMillis() - closeStartMs >= cfg.durationMs) {
             Screen next = pendingNext;
             closing = false;
             closingScreen = null;
             pendingNext = null;
+            menuToMenu = false;
             openScreen = null;
             performingRealClose = true;
-            mc.setScreen(next);
+            mc.setScreen(next); // → onScreenAdded picks up pendingEnterTransition for the new menu's enter
         }
+    }
+
+    /** The transition the outgoing menu {@code s} should EXIT with during a menu→menu nav, else null. */
+    public static MenuTransition exitTransition(Screen s) {
+        return (menuToMenu && closing && s == closingScreen) ? AnimConfigManager.get().menuTransition : null;
+    }
+
+    /** The transition the freshly-opened menu {@code s} should ENTER with, else null. */
+    public static MenuTransition enterTransition(Screen s) {
+        return (openTransition != null && s == openTransitionScreen && s == openScreen) ? openTransition : null;
     }
 
     /** Loading / connection / world-teardown screens we must not hold up or render over. */
@@ -109,12 +155,12 @@ public final class ScreenAnimController {
     public static float rawProgress(Screen s) {
         long now = Util.getMillis();
         if (isClosing(s)) {
-            AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenClose;
+            AnimConfig.ScreenFeature cfg = configFor(s);
             float p = 1.0f - (now - closeStartMs) / (float) Math.max(1, cfg.durationMs);
             return clamp01(p);
         }
         if (s == openScreen) {
-            AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenOpen;
+            AnimConfig.ScreenFeature cfg = configFor(s);
             if (!cfg.on()) return 1.0f;
             float p = (now - openStartMs) / (float) Math.max(1, cfg.durationMs);
             return clamp01(p);
@@ -122,9 +168,20 @@ public final class ScreenAnimController {
         return 1.0f;
     }
 
-    /** Which feature config governs {@code s} right now (close while closing, otherwise open). */
+    /**
+     * Which feature config governs {@code s} right now. Container screens (inventories, chests, creative) use
+     * the Inventory open/close settings; everything else (pause, options, title…) uses the Game-menu settings.
+     */
     public static AnimConfig.ScreenFeature configFor(Screen s) {
-        return isClosing(s) ? AnimConfigManager.get().screenClose : AnimConfigManager.get().screenOpen;
+        AnimConfig c = AnimConfigManager.get();
+        boolean inv = s instanceof AbstractContainerScreen;
+        if (isClosing(s)) return inv ? c.inventoryClose : c.menuClose;
+        return inv ? c.inventoryOpen : c.menuOpen;
+    }
+
+    private static AnimConfig.ScreenFeature closeConfig(Screen s) {
+        AnimConfig c = AnimConfigManager.get();
+        return (s instanceof AbstractContainerScreen) ? c.inventoryClose : c.menuClose;
     }
 
     private static float clamp01(float v) {

@@ -27,4 +27,14 @@ public abstract class MinecraftMixin {
             ci.cancel();
         }
     }
+
+    /**
+     * The new screen has been installed (this only runs when the switch wasn't deferred) — start its open
+     * animation. Done here rather than in {@code Screen.added()} because some screens override {@code added()}
+     * without calling super, which would skip the open animation.
+     */
+    @Inject(method = "setScreen", at = @At("TAIL"))
+    private void animatedgui$onScreenSet(Screen next, CallbackInfo ci) {
+        ScreenAnimController.onScreenAdded(this.screen);
+    }
 }
