@@ -53,7 +53,7 @@ public abstract class RecipeBookComponentMixin implements RecipeBookOpenness {
     private void animatedgui$drive(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a, CallbackInfo ci) {
         animatedgui$pushed = false;
         float target = this.isVisible() ? 1.0f : 0.0f;
-        AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenOpen;
+        AnimConfig.Feature cfg = AnimConfigManager.get().recipeBook;
         long now = Util.getMillis();
 
         if (!cfg.on()) {

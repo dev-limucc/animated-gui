@@ -37,7 +37,7 @@ public abstract class RecipeBookPageMixin {
             }
             animatedgui$lastPage = this.currentPage;
         }
-        AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenOpen;
+        AnimConfig.Feature cfg = AnimConfigManager.get().recipeBook;
         if (!cfg.on() || animatedgui$pageDir == 0) return;
         float t = (Util.getMillis() - animatedgui$pageMs) / (float) Math.max(1, cfg.durationMs);
         if (t < 0.0f || t >= 1.0f) return;

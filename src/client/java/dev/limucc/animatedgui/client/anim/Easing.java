@@ -58,6 +58,11 @@ public enum Easing {
     /** Maps normalized progress t∈[0,1] to the eased value (may briefly exceed [0,1] for BACK/ELASTIC). */
     public abstract float apply(float t);
 
+    /** {@link #apply} with t clamped to [0,1] first. */
+    public float clampApply(float t) {
+        return apply(t < 0 ? 0 : (t > 1 ? 1 : t));
+    }
+
     public Easing next() {
         Easing[] v = values();
         return v[(ordinal() + 1) % v.length];

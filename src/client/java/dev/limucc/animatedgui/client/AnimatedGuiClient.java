@@ -18,5 +18,16 @@ public class AnimatedGuiClient implements ClientModInitializer {
         AnimConfigManager.load();
         ClientTickEvents.END_CLIENT_TICK.register(ScreenAnimController::tick);
         AnimatedGui.LOGGER.info("Animated GUI loaded — smoothing out Minecraft's instant menus.");
+        for (String t : new String[]{
+                "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen",
+                "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                "net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen",
+                "net.minecraft.client.gui.components.AbstractSelectionList",
+                "net.minecraft.client.gui.screens.recipebook.RecipeBookComponent",
+                "net.minecraft.client.gui.screens.recipebook.RecipeBookPage",
+                "net.minecraft.client.gui.GuiGraphicsExtractor"}) {
+            try { Class.forName(t, false, getClass().getClassLoader()); AnimatedGui.LOGGER.info("[validate] {} OK", t); }
+            catch (Throwable e) { AnimatedGui.LOGGER.error("[validate] {} FAILED", t, e); }
+        }
     }
 }
