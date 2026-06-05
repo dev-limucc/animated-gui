@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 public class AnimatedGuiScreen extends Screen {
 
     private static final int ROWS = 6;
+    private static final int HOTBAR_ROW = 3;
     private static final String[] NAMES = {"Chat", "Item move", "Creative scroll", "Hotbar", "Menu open", "Menu close"};
     private static final boolean[] HAS_STYLE = {false, false, false, false, true, true};
 
@@ -132,6 +133,9 @@ public class AnimatedGuiScreen extends Screen {
             if (HAS_STYLE[i] && f instanceof AnimConfig.ScreenFeature sf) {
                 style[i].label = sf.style.label();
                 style[i].render(g, this.font, mouseX, mouseY, on && f.enabled);
+            } else if (i == HOTBAR_ROW) {
+                style[i].label = c.hotbarTrail ? "§aTrail" : "§7Trail";
+                style[i].render(g, this.font, mouseX, mouseY, on && f.enabled);
             }
 
             easing[i].label = f.easing.label();
@@ -167,6 +171,9 @@ public class AnimatedGuiScreen extends Screen {
             if (!f.enabled) continue;
             if (HAS_STYLE[i] && f instanceof AnimConfig.ScreenFeature sf && style[i].contains(mx, my)) {
                 sf.style = sf.style.next(); save(); return true;
+            }
+            if (i == HOTBAR_ROW && style[i].contains(mx, my)) {
+                c.hotbarTrail = !c.hotbarTrail; save(); return true;
             }
             if (easing[i].contains(mx, my)) { f.easing = f.easing.next(); save(); return true; }
             if (minus[i].contains(mx, my)) { f.durationMs = Math.max(DUR_MIN, f.durationMs - DUR_STEP); save(); return true; }

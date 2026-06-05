@@ -13,7 +13,8 @@ public enum ScreenStyle {
     SCALE("Scale") {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
             float cx = w / 2f, cy = h / 2f;
-            float s = 0.62f + 0.38f * p;
+            // Scale all the way from ~0 to 1 so a close shrinks smoothly to nothing (no abrupt pop at 60%).
+            float s = Math.max(0.02f, p);
             pose.translate(cx, cy);
             pose.scale(s, s);
             pose.translate(-cx, -cy);
@@ -21,22 +22,22 @@ public enum ScreenStyle {
     },
     SLIDE_UP("Slide up") {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
-            pose.translate(0.0f, (1.0f - p) * h * 0.22f);
+            pose.translate(0.0f, (1.0f - p) * h * 0.6f);
         }
     },
     SLIDE_DOWN("Slide down") {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
-            pose.translate(0.0f, -(1.0f - p) * h * 0.22f);
+            pose.translate(0.0f, -(1.0f - p) * h * 0.6f);
         }
     },
     SLIDE_LEFT("Slide left") {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
-            pose.translate((1.0f - p) * w * 0.22f, 0.0f);
+            pose.translate((1.0f - p) * w * 0.6f, 0.0f);
         }
     },
     SLIDE_RIGHT("Slide right") {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
-            pose.translate(-(1.0f - p) * w * 0.22f, 0.0f);
+            pose.translate(-(1.0f - p) * w * 0.6f, 0.0f);
         }
     };
 
