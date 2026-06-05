@@ -14,16 +14,18 @@ style, speed and easing curve of every single one from a flat, Sodium-inspired s
 | Animation | What it does |
 | --- | --- |
 | **Chat** | New messages slide up from below and the older lines glide up with them, instead of hard-popping. |
-| **Item move** | When a stack moves between slots (shift-click, quick-move, crafting, sorting), the icon glides from its old slot to the new one instead of teleporting. |
-| **Creative scroll** | The creative inventory's row-at-a-time "paging" is replaced with a smooth eased scroll that cascades row by row as you spin the wheel. |
-| **Hotbar** | The selection box slides between hotbar slots instead of snapping (and snaps cleanly on the 8↔0 wrap, rather than sweeping the whole bar). |
-| **Menu open / close** | Inventories, the pause menu and other screens scale or slide in when opened — and, thanks to a deferred close, animate *out* when closed too. |
+| **Item move** | When a stack moves between slots (shift-click / quick-move, sorting, transfers), the icon glides from its old slot to the new one instead of teleporting. Stack-merges fly a ghost in and leave the existing stack put. |
+| **Creative scroll** | The creative inventory's row-at-a-time "paging" is replaced with a true pixel-smooth slide — the slot grid *and* the items scroll together, by wheel or by dragging the scrollbar. |
+| **Hotbar** | The selection box slides between hotbar slots instead of snapping (and snaps cleanly on the 8↔0 wrap). Optional motion-blur **trail**. |
+| **Menu open / close** | Inventories, the pause menu and other screens scale or slide in when opened — and, thanks to a deferred close, animate *out* when closed too. The 3D inventory player model animates along with the panel. |
+| **Menu navigation** | "Back"/"Done" between menus animates the old screen out before the new one animates in. |
+| **Recipe book** | The recipe-book side panel slides in/out and the inventory glides aside to make room (instead of teleporting); paging recipes slides the grid. |
 
 Every feature has its **own** enable toggle, **duration** (ms) and **easing curve**; screens additionally pick a
 **movement style**. There's a master switch to freeze everything back to vanilla in one click.
 
 ### Easing curves
-`Linear` · `Smooth` (sine) · `Ease-out` · `Ease-in-out` · `Overshoot` (back) · `Elastic` · `Bounce`
+`Linear` · `Smooth` (sine) · `Ease-out` · `Ease-in` · `Ease-in-out` · `Overshoot` (back) · `Elastic` · `Bounce`
 
 Pick `Overshoot` or `Elastic` on **Menu open** with the `Scale` style for a satisfying pop.
 
@@ -42,12 +44,15 @@ flat UI style (dark translucent panel, accent-blue hover). Settings are saved to
   "masterEnabled": true,
   "chat":          { "enabled": true, "durationMs": 220, "easing": "EASE_OUT" },
   "items":         { "enabled": true, "durationMs": 200, "easing": "EASE_OUT" },
-  "creativeScroll":{ "enabled": true, "durationMs": 250, "easing": "EASE_OUT" },
+  "creativeScroll":{ "enabled": true, "durationMs": 220, "easing": "EASE_OUT" },
   "hotbar":        { "enabled": true, "durationMs": 150, "easing": "EASE_OUT" },
-  "screenOpen":    { "enabled": true, "durationMs": 240, "easing": "BACK",       "style": "SCALE" },
-  "screenClose":   { "enabled": true, "durationMs": 170, "easing": "EASE_IN_OUT","style": "SCALE" }
+  "screenOpen":    { "enabled": true, "durationMs": 220, "easing": "EASE_OUT", "style": "SCALE" },
+  "screenClose":   { "enabled": true, "durationMs": 180, "easing": "EASE_IN",  "style": "SCALE" },
+  "hotbarTrail":   false
 }
 ```
+
+Recipe-book panel / inventory-shift / page-turn animations follow the **Menu open** setting.
 
 ---
 

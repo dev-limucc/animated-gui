@@ -12,13 +12,16 @@ public final class FlyAnim {
     public final long startMs;
     public final int durationMs;
     public final Easing easing;
+    /** True when the item merged into an existing stack — animate only a ghost copy, leaving the stack in place. */
+    public final boolean merge;
 
-    public FlyAnim(int fromX, int fromY, long startMs, int durationMs, Easing easing) {
+    public FlyAnim(int fromX, int fromY, long startMs, int durationMs, Easing easing, boolean merge) {
         this.fromX = fromX;
         this.fromY = fromY;
         this.startMs = startMs;
         this.durationMs = Math.max(1, durationMs);
         this.easing = easing;
+        this.merge = merge;
     }
 
     /** Fraction of the source→dest offset still to apply: 1 at the start, 0 once it has landed. */

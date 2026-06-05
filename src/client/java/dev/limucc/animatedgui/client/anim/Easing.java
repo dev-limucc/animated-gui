@@ -17,6 +17,9 @@ public enum Easing {
     EASE_OUT("Ease-out") {
         @Override public float apply(float t) { float u = 1 - t; return 1 - u * u * u; }
     },
+    EASE_IN("Ease-in") {
+        @Override public float apply(float t) { return t * t * t; }
+    },
     EASE_IN_OUT("Ease-in-out") {
         @Override public float apply(float t) {
             return t < 0.5f ? 4 * t * t * t : 1 - (float) Math.pow(-2 * t + 2, 3) / 2f;

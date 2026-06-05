@@ -14,10 +14,13 @@ public class AnimConfig {
 
     public Feature chat = new Feature(true, 220, Easing.EASE_OUT);
     public Feature items = new Feature(true, 200, Easing.EASE_OUT);
-    public Feature creativeScroll = new Feature(true, 250, Easing.EASE_OUT);
+    public Feature creativeScroll = new Feature(true, 220, Easing.EASE_OUT);
     public Feature hotbar = new Feature(true, 150, Easing.EASE_OUT);
-    public ScreenFeature screenOpen = new ScreenFeature(true, 240, Easing.BACK, ScreenStyle.SCALE);
-    public ScreenFeature screenClose = new ScreenFeature(true, 170, Easing.EASE_IN_OUT, ScreenStyle.SCALE);
+    public ScreenFeature screenOpen = new ScreenFeature(true, 220, Easing.EASE_OUT, ScreenStyle.SCALE);
+    public ScreenFeature screenClose = new ScreenFeature(true, 180, Easing.EASE_IN, ScreenStyle.SCALE);
+
+    /** Optional motion-blur trail behind the hotbar selector as it slides (off by default). */
+    public boolean hotbarTrail = false;
 
     /** enabled + duration + easing — the shared shape of a single animated feature. */
     public static class Feature {
@@ -57,8 +60,8 @@ public class AnimConfig {
         if (items == null) items = new Feature(true, 200, Easing.EASE_OUT);
         if (creativeScroll == null) creativeScroll = new Feature(true, 250, Easing.EASE_OUT);
         if (hotbar == null) hotbar = new Feature(true, 150, Easing.EASE_OUT);
-        if (screenOpen == null) screenOpen = new ScreenFeature(true, 240, Easing.BACK, ScreenStyle.SCALE);
-        if (screenClose == null) screenClose = new ScreenFeature(true, 170, Easing.EASE_IN_OUT, ScreenStyle.SCALE);
+        if (screenOpen == null) screenOpen = new ScreenFeature(true, 220, Easing.EASE_OUT, ScreenStyle.SCALE);
+        if (screenClose == null) screenClose = new ScreenFeature(true, 180, Easing.EASE_IN, ScreenStyle.SCALE);
         for (Feature f : new Feature[]{chat, items, creativeScroll, hotbar, screenOpen, screenClose}) {
             if (f.easing == null) f.easing = Easing.EASE_OUT;
             f.durationMs = Math.max(20, Math.min(2000, f.durationMs));

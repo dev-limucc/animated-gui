@@ -25,8 +25,16 @@ public final class ScreenAnimController {
     private static Screen closingScreen;
     private static long closeStartMs;
 
-    /** Set just before we re-issue the real {@code setScreen(null)} so the mixin lets it through. */
+    /** Set just before we re-issue the real {@code setScreen(...)} so the mixin lets it through. */
     private static boolean performingRealClose;
+    /** The screen to switch to once the outgoing screen has finished animating away (may be null = gameplay). */
+    private static Screen pendingNext;
+    /**
+     * True only while a screen's open/close pose transform is on the stack. The graphics mixin reads this to
+     * also drag the 3D entity render (the inventory player model) along with the transform — it's a
+     * picture-in-picture that otherwise ignores the 2D pose.
+     */
+    public static boolean transformActive;
 
     /** Screens we leave alone — the chat input bar shouldn't scale/slide. */
     public static boolean animatable(Screen s) {
@@ -44,36 +52,50 @@ public final class ScreenAnimController {
     }
 
     /**
-     * From {@code Minecraft.setScreen} HEAD. Returns true if we intercepted a close (caller must cancel the
-     * vanilla switch); the outgoing screen stays up and animates out, and {@link #tick} finishes the job.
+     * From {@code Minecraft.setScreen} HEAD. Returns true if we intercepted the switch (caller must cancel it);
+     * the outgoing screen stays up to animate out, then {@link #tick} performs the real switch to {@code next}.
+     * Covers both closing back to gameplay ({@code next == null}) and menu→menu navigation (e.g. a sub-screen's
+     * Back button returning to the title). Loading / connection / teardown screens pass straight through.
      */
     public static boolean interceptClose(Minecraft mc, Screen current, Screen next) {
         if (performingRealClose) { performingRealClose = false; return false; }
         AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenClose;
         if (!cfg.on()) return false;
-        if (next != null) return false;                       // only animate closing back to gameplay
-        if (!animatable(current)) return false;
-        if (mc.level == null) return false;                   // going to title/disconnect — don't hold it
-        if (mc.player == null || mc.player.isDeadOrDying()) return false;
-        if (closing) return false;                            // already animating out
+        if (closing) return false;                            // already animating one out
+        if (!animatable(current) || next == current) return false;
+        if (isTransient(current) || isTransient(next)) return false; // don't hold/delay system screens
+        // Closing to gameplay: don't animate during death/respawn.
+        if (next == null && mc.level != null && (mc.player == null || mc.player.isDeadOrDying())) return false;
+        pendingNext = next;
         closing = true;
         closingScreen = current;
         closeStartMs = Util.getMillis();
         return true;
     }
 
-    /** Per client tick: when the close animation has elapsed, actually close. */
+    /** Per client tick: when the close animation has elapsed, perform the real switch to the pending screen. */
     public static void tick(Minecraft mc) {
         if (!closing) return;
-        if (mc.screen != closingScreen) { closing = false; closingScreen = null; return; }
+        if (mc.screen != closingScreen) { closing = false; closingScreen = null; pendingNext = null; return; }
         AnimConfig.ScreenFeature cfg = AnimConfigManager.get().screenClose;
         if (Util.getMillis() - closeStartMs >= cfg.durationMs) {
+            Screen next = pendingNext;
             closing = false;
             closingScreen = null;
+            pendingNext = null;
             openScreen = null;
             performingRealClose = true;
-            mc.setScreen(null);
+            mc.setScreen(next);
         }
+    }
+
+    /** Loading / connection / world-teardown screens we must not hold up or render over. */
+    private static boolean isTransient(Screen s) {
+        if (s == null) return false;
+        String n = s.getClass().getSimpleName();
+        return n.contains("Connect") || n.contains("Progress") || n.contains("Receiving")
+                || n.contains("Loading") || n.contains("Downloading") || n.contains("Reconnect")
+                || n.contains("GenericMessage") || n.contains("Disconnect");
     }
 
     public static boolean isClosing(Screen s) {

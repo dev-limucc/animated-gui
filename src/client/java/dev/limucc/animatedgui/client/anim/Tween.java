@@ -30,6 +30,9 @@ public final class Tween {
 
     public float current() { return current; }
 
+    /** Value the current segment started from (used to draw a motion-blur trail behind a moving target). */
+    public float start() { return start; }
+
     public boolean isActive() { return active; }
 
     /** Aim at {@code target}; if it differs from where we're already heading, start a fresh eased segment. */

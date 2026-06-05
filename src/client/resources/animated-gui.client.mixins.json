@@ -9,7 +9,11 @@
     "CreativeModeInventoryScreenMixin",
     "AbstractContainerScreenMixin",
     "ScreenMixin",
-    "MinecraftMixin"
+    "MinecraftMixin",
+    "AbstractRecipeBookScreenMixin",
+    "RecipeBookComponentMixin",
+    "RecipeBookPageMixin",
+    "GuiGraphicsExtractorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

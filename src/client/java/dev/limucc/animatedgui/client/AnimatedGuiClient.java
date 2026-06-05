@@ -17,6 +17,6 @@ public class AnimatedGuiClient implements ClientModInitializer {
     public void onInitializeClient() {
         AnimConfigManager.load();
         ClientTickEvents.END_CLIENT_TICK.register(ScreenAnimController::tick);
-        AnimatedGui.LOGGER.info("Animated GUI client ready.");
+        AnimatedGui.LOGGER.info("Animated GUI loaded — smoothing out Minecraft's instant menus.");
     }
 }
