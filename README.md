@@ -7,6 +7,12 @@ style, speed and easing curve of every single one from a flat, Sodium-inspired s
 
 > Fabric · Minecraft **26.1.2** · client-side only · by **dev-limucc**
 
+<p align="center">
+  <img src="Gallery/anim-menu.webp" width="32%" alt="Animated menu open/close" />
+  <img src="Gallery/anim-inventory.webp" width="32%" alt="Animated inventory" />
+  <img src="Gallery/anim-item-glide.webp" width="32%" alt="Items gliding between slots" />
+</p>
+
 ---
 
 ## Features
@@ -86,6 +92,15 @@ Requires JDK 25.
 
 Drop the jar (plus [Fabric API](https://modrinth.com/mod/fabric-api) and, for the settings screen,
 [ModMenu](https://modrinth.com/mod/modmenu)) into your `mods/` folder.
+
+---
+
+## Reusable UI style library
+
+The flat, animated look this mod uses is documented as a standalone, copy-paste-ready style library in
+**[`STYLE.md`](STYLE.md)** — palette, the `Easing`/`Tween` motion engine, the `FlatButton` / `ToggleSwitch`
+widget kit, the screen skeleton, and the screen-transition system. Lift any of it into another Fabric mod; the
+core pieces are self-contained. (`AGENTS.md` is the short entry pointer for AI coding assistants.)
 
 ---
 
