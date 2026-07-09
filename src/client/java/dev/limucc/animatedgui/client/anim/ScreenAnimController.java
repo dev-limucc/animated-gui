@@ -111,7 +111,7 @@ public final class ScreenAnimController {
     /** Per client tick: when the close animation has elapsed, perform the real switch to the pending screen. */
     public static void tick(Minecraft mc) {
         if (!closing) return;
-        if (mc.screen != closingScreen) { closing = false; closingScreen = null; pendingNext = null; return; }
+        if (mc.gui.screen() != closingScreen) { closing = false; closingScreen = null; pendingNext = null; return; }
         AnimConfig.ScreenFeature cfg = closeConfig(closingScreen);
         if (Util.getMillis() - closeStartMs >= cfg.durationMs) {
             Screen next = pendingNext;
@@ -121,7 +121,7 @@ public final class ScreenAnimController {
             menuToMenu = false;
             openScreen = null;
             performingRealClose = true;
-            mc.setScreen(next); // → onScreenAdded picks up pendingEnterTransition for the new menu's enter
+            mc.gui.setScreen(next); // → onScreenAdded picks up pendingEnterTransition for the new menu's enter
         }
     }
 

@@ -8,8 +8,8 @@ import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
 import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,8 +23,8 @@ import org.spongepowered.asm.mixin.injection.At;
  * trail is enabled) draw a few fading ghost copies along the path it's travelling. Wrapping (8↔0) snaps rather
  * than sweeping the whole bar.
  */
-@Mixin(Gui.class)
-public abstract class GuiMixin {
+@Mixin(Hud.class)
+public abstract class HudMixin {
 
     @Shadow @Final private Minecraft minecraft;
 
