@@ -1,5 +1,7 @@
 # Animated GUI
 
+[![build](https://github.com/dev-limucc/animated-gui/actions/workflows/build.yml/badge.svg)](https://github.com/dev-limucc/animated-gui/actions/workflows/build.yml)
+
 Minecraft's menus are *instant*. Items teleport between slots, the hotbar selector snaps from one slot to the
 next, chat messages pop in, the creative inventory scrolls a whole page at a time, and screens blink open and
 shut. **Animated GUI** replaces all of that with smooth, framerate-independent motion — and lets you tune the
