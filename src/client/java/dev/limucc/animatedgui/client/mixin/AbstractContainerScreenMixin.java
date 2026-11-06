@@ -5,18 +5,21 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.limucc.animatedgui.client.anim.CreativeScroll;
 import dev.limucc.animatedgui.client.anim.FlyAnim;
+import dev.limucc.animatedgui.client.anim.ScreenAnimController;
 import dev.limucc.animatedgui.client.anim.SlotSource;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
-import net.minecraft.util.Util;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.util.Util;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,6 +30,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +42,8 @@ import java.util.Map;
  *   <li><b>Item glide</b> — diff the container each frame; a slot that loses an item is remembered as a
  *       "source" for a short window, and when a slot fills with that same item (even a few frames later, as
  *       happens with server-authoritative shift-clicks) the destination icon is drawn back at the source and
- *       eased home.</li>
+ *       eased home. The per-frame diff is allocation-free: it keeps a primitive {@code (Item, count)} snapshot per
+ *       slot and only does real work for the slots that changed.</li>
  *   <li><b>Creative pixel-slide</b> — when {@link CreativeScroll} is active, the creative grid's items are
  *       nudged up by the sub-row pixel offset (clipped to the grid) and one extra incoming row is drawn at the
  *       bottom, turning the row-paging into a smooth slide.</li>
@@ -51,7 +56,13 @@ public abstract class AbstractContainerScreenMixin {
 
     @Unique private static final long SOURCE_WINDOW_MS = 400L;
 
-    @Unique private final Map<Slot, ItemStack> animatedgui$prev = new IdentityHashMap<>();
+    /** Per-slot snapshot of what the slot held last frame (item + count only: that's all the glide logic reads). */
+    @Unique private Slot[] animatedgui$snapSlot = new Slot[0];
+    @Unique private Item[] animatedgui$snapItem = new Item[0];
+    @Unique private int[] animatedgui$snapCount = new int[0];
+    @Unique private int[] animatedgui$changed = new int[0];
+    @Unique private boolean animatedgui$tracking;
+
     @Unique private final Map<Slot, FlyAnim> animatedgui$flying = new IdentityHashMap<>();
     @Unique private final List<SlotSource> animatedgui$recentSources = new ArrayList<>();
 
@@ -66,68 +77,116 @@ public abstract class AbstractContainerScreenMixin {
         }
 
         AnimConfig.Feature cfg = AnimConfigManager.get().items;
-        if (!cfg.on()) {
+        if (!cfg.on() || ScreenAnimController.isDenied((Screen) (Object) this)) {
             if (!animatedgui$flying.isEmpty()) animatedgui$flying.clear();
             if (!animatedgui$recentSources.isEmpty()) animatedgui$recentSources.clear();
+            if (animatedgui$tracking) {
+                Arrays.fill(animatedgui$snapSlot, null); // stale baseline: re-take it when tracking resumes
+                animatedgui$tracking = false;
+            }
             return;
         }
+        animatedgui$tracking = true;
 
         long now = Util.getMillis();
-        animatedgui$recentSources.removeIf(s -> now - s.time > SOURCE_WINDOW_MS);
-        List<Slot> slots = this.menu.slots;
+        List<SlotSource> sources = animatedgui$recentSources;
+        for (int i = sources.size() - 1; i >= 0; i--) {
+            if (now - sources.get(i).time > SOURCE_WINDOW_MS) sources.remove(i);
+        }
 
-        // Pass 1: slots that lost (some of) an item become sources — but skip the creative grid, whose contents
-        // reshuffle on scroll (that's not a real move; explicit shift-clicks are recorded in slotClicked).
-        for (Slot slot : slots) {
-            if (creative && slot.container == CreativeScroll.container) continue;
-            ItemStack prev = animatedgui$prev.get(slot);
-            if (prev == null || prev.isEmpty()) continue;
-            ItemStack cur = slot.getItem();
-            if (cur.isEmpty() || cur.getItem() != prev.getItem() || cur.getCount() < prev.getCount()) {
-                animatedgui$recentSources.add(new SlotSource(prev.getItem(), slot.x, slot.y, now));
+        List<Slot> slots = this.menu.slots;
+        int n = slots.size();
+        if (animatedgui$snapSlot.length < n) {
+            animatedgui$snapSlot = Arrays.copyOf(animatedgui$snapSlot, n);
+            animatedgui$snapItem = Arrays.copyOf(animatedgui$snapItem, n);
+            animatedgui$snapCount = Arrays.copyOf(animatedgui$snapCount, n);
+            animatedgui$changed = new int[n];
+        }
+        Slot[] snapSlot = animatedgui$snapSlot;
+        Item[] snapItem = animatedgui$snapItem;
+        int[] snapCount = animatedgui$snapCount;
+        int[] changed = animatedgui$changed;
+        int nChanged = 0;
+
+        // Scan: compare every slot to its snapshot. Unchanged slots (the overwhelming majority) cost two compares.
+        for (int i = 0; i < n; i++) {
+            Slot slot = slots.get(i);
+            ItemStack stack = slot.getItem();
+            Item item = stack.isEmpty() ? null : stack.getItem();
+            int count = item == null ? 0 : stack.getCount();
+            // New slot (first frame, or the creative screen swapped its slot set) or a creative-grid slot, whose
+            // contents reshuffle on scroll — that's not a real move (explicit shift-clicks are recorded in
+            // slotClicked): just re-baseline, never animate.
+            if (snapSlot[i] != slot || (creative && slot.container == CreativeScroll.container)) {
+                snapSlot[i] = slot;
+                snapItem[i] = item;
+                snapCount[i] = count;
+                continue;
+            }
+            if (snapItem[i] == item && snapCount[i] == count) continue;
+            changed[nChanged++] = i;
+        }
+        if (nChanged == 0) return;
+
+        // Pass 1: slots that lost (some of) an item become sources.
+        for (int k = 0; k < nChanged; k++) {
+            int i = changed[k];
+            Item prev = snapItem[i];
+            if (prev == null) continue;
+            ItemStack cur = slots.get(i).getItem();
+            if (cur.isEmpty() || cur.getItem() != prev || cur.getCount() < snapCount[i]) {
+                Slot s = slots.get(i);
+                sources.add(new SlotSource(prev, s.x, s.y, now));
             }
         }
 
         // Pass 2: a slot that filled (clean move) or grew (stack merge) flies in from the nearest source.
-        for (Slot slot : slots) {
-            if (creative && slot.container == CreativeScroll.container) continue;
-            ItemStack prev = animatedgui$prev.get(slot);
+        for (int k = 0; k < nChanged; k++) {
+            int i = changed[k];
+            Slot slot = slots.get(i);
             ItemStack cur = slot.getItem();
-            if (prev == null || cur.isEmpty()) continue;
-            boolean cleanFill = prev.isEmpty();
-            boolean stacked = !prev.isEmpty() && cur.getItem() == prev.getItem() && cur.getCount() > prev.getCount();
-            if (!cleanFill && !stacked) continue; // ignore swaps / unchanged slots
+            if (cur.isEmpty()) continue;
+            Item prev = snapItem[i];
+            boolean cleanFill = prev == null;
+            boolean stacked = !cleanFill && cur.getItem() == prev && cur.getCount() > snapCount[i];
+            if (!cleanFill && !stacked) continue; // ignore swaps
 
             int bestIdx = -1;
             long bestDist = Long.MAX_VALUE;
-            for (int i = 0; i < animatedgui$recentSources.size(); i++) {
-                SlotSource s = animatedgui$recentSources.get(i);
+            for (int j = 0; j < sources.size(); j++) {
+                SlotSource s = sources.get(j);
                 if (s.item != cur.getItem()) continue;
                 long dx = s.x - slot.x, dy = s.y - slot.y;
                 long dist = dx * dx + dy * dy;
                 if (dist < bestDist && dist > 0) {
                     bestDist = dist;
-                    bestIdx = i;
+                    bestIdx = j;
                 }
             }
             if (bestIdx >= 0) {
-                SlotSource s = animatedgui$recentSources.remove(bestIdx);
+                SlotSource s = sources.remove(bestIdx);
                 animatedgui$flying.put(slot, new FlyAnim(s.x, s.y, now, cfg.durationMs, cfg.easing, !cleanFill));
             }
         }
 
-        for (Slot slot : slots) {
-            if (creative && slot.container == CreativeScroll.container) continue;
-            ItemStack cur = slot.getItem();
-            animatedgui$prev.put(slot, cur.isEmpty() ? ItemStack.EMPTY : cur.copy());
+        // Snapshot only what changed.
+        for (int k = 0; k < nChanged; k++) {
+            int i = changed[k];
+            ItemStack cur = slots.get(i).getItem();
+            Item item = cur.isEmpty() ? null : cur.getItem();
+            snapItem[i] = item;
+            snapCount[i] = item == null ? 0 : cur.getCount();
         }
     }
 
     /** Record the clicked slot as a fly source so shift-click (quick-move) animates — including the creative
      *  grid, whose items "leave" without the slot itself emptying. */
-    @Inject(method = "slotClicked", at = @At("HEAD"))
+    @Inject(
+            method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V",
+            at = @At("HEAD"))
     private void animatedgui$onQuickMove(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
-        if (!AnimConfigManager.get().items.on() || input != ContainerInput.QUICK_MOVE || slot == null) return;
+        if (input != ContainerInput.QUICK_MOVE || slot == null || !AnimConfigManager.get().items.on()
+                || ScreenAnimController.isDenied((Screen) (Object) this)) return;
         ItemStack stack = slot.getItem();
         if (!stack.isEmpty()) {
             animatedgui$recentSources.add(new SlotSource(stack.getItem(), slot.x, slot.y, Util.getMillis()));
@@ -241,6 +300,7 @@ public abstract class AbstractContainerScreenMixin {
     /** The slot's live fly animation, or null if none / already landed (expired ones are dropped). */
     @Unique
     private FlyAnim animatedgui$flyOf(Slot slot) {
+        if (animatedgui$flying.isEmpty()) return null;
         FlyAnim fa = animatedgui$flying.get(slot);
         if (fa == null) return null;
         if (fa.remaining(Util.getMillis()) <= 0.0f) {

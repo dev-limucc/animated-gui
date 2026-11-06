@@ -9,12 +9,17 @@
     "CreativeModeInventoryScreenMixin",
     "AbstractContainerScreenMixin",
     "AbstractSelectionListMixin",
+    "AbstractContainerWidgetMixin",
     "ScreenMixin",
     "GuiSetScreenMixin",
     "AbstractRecipeBookScreenMixin",
     "RecipeBookComponentMixin",
     "RecipeBookPageMixin",
-    "GuiGraphicsExtractorMixin"
+    "GuiGraphicsExtractorMixin",
+    "GuiItemRenderStateMixin",
+    "GuiRendererMixin",
+    "PictureInPictureRendererMixin",
+    "MouseHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

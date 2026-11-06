@@ -3,12 +3,15 @@ package dev.limucc.animatedgui.client.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.limucc.animatedgui.AnimatedGui;
+import dev.limucc.animatedgui.client.anim.GfxAccess;
 import dev.limucc.animatedgui.client.anim.InventoryShiftProvider;
 import dev.limucc.animatedgui.client.anim.MenuTransition;
 import dev.limucc.animatedgui.client.anim.ScreenAnimController;
+import dev.limucc.animatedgui.client.anim.ScreenStyle;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -30,34 +33,70 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * exit (over its close timeline), then — after the deferred swap — the incoming menu plays the matching enter
  * (over its open timeline). Only one screen ever renders, over a backdrop both draw identically, so the panel
  * hands off without a flash and there's nothing fragile to crash.
+ *
+ * <p>Input stays truthful while a transform is on screen: the transform is published to
+ * {@link ScreenAnimController} and the mouse is mapped through its inverse (see {@code MouseHandlerMixin}), and
+ * tooltips are dropped mid-animation (they would hang off a moving slot).
  */
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
 
     @Unique private boolean animatedgui$pushed;
+    /** The screen is mid open/close/transition (as opposed to merely shifted aside by the recipe book). */
+    @Unique private boolean animatedgui$animating;
     @Unique private static boolean animatedgui$warnedTextureView;
+
+    /** Set when the transform was pushed from inside {@code Screen.extractBackground} this frame. */
+    @Unique private boolean animatedgui$applied;
 
     @Inject(
             method = "extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
             at = @At("RETURN"))
     private void animatedgui$pushAfterDim(
             GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a, CallbackInfo ci) {
+        animatedgui$applied = true;
+        animatedgui$apply(graphics);
+    }
+
+    /**
+     * Some screens (the pause menu) override {@code extractBackground} without calling {@code super}, so the hook
+     * above never fires for them. This wrapper notices that and pushes the transform right after their background
+     * instead — their dim/blur stays put and everything drawn afterwards animates, same as for the rest.
+     */
+    @WrapOperation(
+            method = "extractRenderStateWithTooltipAndSubtitles",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/gui/screens/Screen;extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
+    private void animatedgui$backgroundFallback(
+            Screen self, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a, Operation<Void> original) {
+        animatedgui$applied = false;
+        original.call(self, graphics, mouseX, mouseY, a);
+        if (!animatedgui$applied) {
+            animatedgui$applied = true;
+            animatedgui$apply(graphics);
+        }
+    }
+
+    @Unique
+    private void animatedgui$apply(GuiGraphicsExtractor graphics) {
         Screen me = (Screen) (Object) this;
         ScreenAnimController.fadeAlpha = 1.0f;
+        ScreenAnimController.beginFrame(me); // once per rendered frame: advances the open clock
+        animatedgui$animating = false;
         int w = graphics.guiWidth(), h = graphics.guiHeight();
+        Matrix3x2f m = ScreenAnimController.scratch;
 
         // Menu→menu EXIT: the outgoing menu slides off / shrinks / fades per the chosen transition, over its
         // close timeline (te runs 0→1 as it leaves).
         MenuTransition exit = ScreenAnimController.exitTransition(me);
         if (exit != null) {
             AnimConfig.ScreenFeature cfg = ScreenAnimController.configFor(me);   // menuClose
-            float te = cfg.easing.apply(1.0f - ScreenAnimController.rawProgress(me));
-            Matrix3x2fStack pose = graphics.pose();
-            pose.pushMatrix();
-            exit.applyExit(pose, te, w, h);
+            float te = cfg.effEasing().apply(1.0f - ScreenAnimController.rawProgress(me));
+            m.identity();
+            exit.applyExit(m, te, w, h);
+            animatedgui$push(graphics, me, m);
             ScreenAnimController.fadeAlpha = exit.exitAlpha(te);
-            animatedgui$pushed = true;
-            ScreenAnimController.transformActive = true;
             return;
         }
 
@@ -65,13 +104,11 @@ public abstract class ScreenMixin {
         MenuTransition enter = ScreenAnimController.enterTransition(me);
         if (enter != null && ScreenAnimController.rawProgress(me) < 1.0f) {
             AnimConfig.ScreenFeature cfg = ScreenAnimController.configFor(me);   // menuOpen
-            float tn = cfg.easing.apply(ScreenAnimController.rawProgress(me));
-            Matrix3x2fStack pose = graphics.pose();
-            pose.pushMatrix();
-            enter.applyEnter(pose, tn, w, h);
+            float tn = cfg.effEasing().apply(ScreenAnimController.rawProgress(me));
+            m.identity();
+            enter.applyEnter(m, tn, w, h);
+            animatedgui$push(graphics, me, m);
             ScreenAnimController.fadeAlpha = enter.enterAlpha(tn);
-            animatedgui$pushed = true;
-            ScreenAnimController.transformActive = true;
             return;
         }
 
@@ -82,22 +119,42 @@ public abstract class ScreenMixin {
         if (!animating && Math.abs(invShift) < 0.01f) {
             animatedgui$pushed = false;
             ScreenAnimController.transformActive = false;
+            ScreenAnimController.clearTransform();
             return;
         }
         Matrix3x2fStack pose = graphics.pose();
         pose.pushMatrix();
         if (animating) {
             AnimConfig.ScreenFeature cfg = ScreenAnimController.configFor(me);
-            float p = cfg.easing.apply(raw);
-            cfg.style.apply(pose, p, w, h);
-            if (cfg.style.fades()) {
+            float p = cfg.effEasing().apply(raw);
+            ScreenStyle style = cfg.effStyle();
+            m.identity();
+            style.apply(m, p, w, h);
+            pose.mul(m);
+            ScreenAnimController.publishTransform(me, m);
+            animatedgui$animating = true;
+            if (style.fades()) {
                 ScreenAnimController.fadeAlpha = Math.max(0.0f, Math.min(1.0f, p));
             }
+        } else {
+            ScreenAnimController.clearTransform();
         }
         if (Math.abs(invShift) >= 0.01f) {
             pose.translate(invShift, 0.0f);
         }
         animatedgui$pushed = true;
+        ScreenAnimController.transformActive = true;
+    }
+
+    /** Push {@code m} (the already-built menu-transition transform) and publish it for mouse mapping. */
+    @Unique
+    private void animatedgui$push(GuiGraphicsExtractor graphics, Screen me, Matrix3x2f m) {
+        Matrix3x2fStack pose = graphics.pose();
+        pose.pushMatrix();
+        pose.mul(m);
+        ScreenAnimController.publishTransform(me, m);
+        animatedgui$pushed = true;
+        animatedgui$animating = true;
         ScreenAnimController.transformActive = true;
     }
 
@@ -127,6 +184,12 @@ public abstract class ScreenMixin {
             if (animatedgui$pushed) {
                 graphics.pose().popMatrix();
                 animatedgui$pushed = false;
+            }
+            if (animatedgui$animating) {
+                // A tooltip queued mid-animation would be drawn at the (mapped) mouse position, not under the
+                // real cursor, and would hang off a moving slot. It's back the frame the animation settles.
+                ((GfxAccess) (Object) graphics).animatedgui$clearTooltip();
+                animatedgui$animating = false;
             }
             ScreenAnimController.transformActive = false;
             ScreenAnimController.fadeAlpha = 1.0f;

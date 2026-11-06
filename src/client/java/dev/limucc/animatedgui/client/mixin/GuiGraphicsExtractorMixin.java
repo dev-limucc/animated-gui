@@ -1,13 +1,18 @@
 package dev.limucc.animatedgui.client.mixin;
 
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.limucc.animatedgui.client.anim.GfxAccess;
+import dev.limucc.animatedgui.client.anim.PipCapture;
 import dev.limucc.animatedgui.client.anim.ScreenAnimController;
+import dev.limucc.animatedgui.client.compat.GfxCompat;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState;
 import org.joml.Matrix3x2fStack;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
+import org.joml.Quaternionfc;
+import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -16,37 +21,49 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Two render-side jobs for screen animations:
+ * Render-side jobs for screen animations:
  *
  * <ul>
- *   <li><b>Entity follow</b> — {@code entity()} submits the inventory's 3D player model with absolute bounds and
- *       its own scale, ignoring the 2D pose; while a transform is active we run those through the pose so the
- *       model shrinks/slides with the panel (also fixes the creative open "top-left flash").</li>
- *   <li><b>Opacity</b> — for the FADE style we tint every fill / blit / text by {@code fadeAlpha} just before it
+ *   <li><b>Player model</b> — the inventory's 3D player model is a picture-in-picture that ignores the 2D pose.
+ *       While a screen transform is active we record the pose + opacity it was submitted with and hand the state
+ *       <em>transformed bounds</em> (so the GUI layering still puts it above the moving panel); the model's own
+ *       bounds, and therefore its render texture, never change. {@code PictureInPictureRendererMixin} then blits
+ *       it through that pose, tinted by the fade.</li>
+ *   <li><b>Opacity</b> — for the FADE styles we tint every fill / blit / text by {@code fadeAlpha} just before it
  *       is submitted, by multiplying the alpha of the colour each draw funnels through. Gated on
- *       {@code fadeAlpha < 1}, so it's a no-op for the entire game except the fading menu's own draws.</li>
+ *       {@code fadeAlpha < 1}, so it's a no-op for the entire game except the fading menu's own draws. Items and
+ *       the player model are tinted later, where their textures are blitted (see the two sibling mixins).</li>
+ *   <li><b>Tooltip drop</b> — lets the screen mixin discard the tooltip a slot queued mid-animation.</li>
  * </ul>
  */
 @Mixin(GuiGraphicsExtractor.class)
-public abstract class GuiGraphicsExtractorMixin {
+public abstract class GuiGraphicsExtractorMixin implements GfxAccess {
 
     @Shadow @Final private Matrix3x2fStack pose;
+    @Shadow private Runnable deferredTooltip;
 
-    @WrapMethod(method = "entity")
-    private void animatedgui$transformEntity(
-            EntityRenderState renderState, float scale, Vector3f translation, Quaternionf rotation,
-            Quaternionf overrideCameraAngle, int x0, int y0, int x1, int y1, Operation<Void> original) {
+    @Override
+    public void animatedgui$clearTooltip() {
+        this.deferredTooltip = null;
+    }
+
+    @WrapOperation(
+            method = "entity",
+            at = @At(value = "NEW", target = "net/minecraft/client/renderer/state/gui/pip/GuiEntityRenderState"))
+    private GuiEntityRenderState animatedgui$captureEntity(
+            EntityRenderState renderState, Vector3fc translation, Quaternionfc rotation,
+            Quaternionfc overrideCameraAngle, int x0, int y0, int x1, int y1, float scale,
+            ScreenRectangle scissor, Operation<GuiEntityRenderState> original) {
         if (!ScreenAnimController.transformActive) {
-            original.call(renderState, scale, translation, rotation, overrideCameraAngle, x0, y0, x1, y1);
-            return;
+            return original.call(renderState, translation, rotation, overrideCameraAngle, x0, y0, x1, y1, scale, scissor);
         }
-        Matrix3x2fStack m = this.pose;
-        int nx0 = Math.round(m.m00 * x0 + m.m10 * y0 + m.m20);
-        int ny0 = Math.round(m.m01 * x0 + m.m11 * y0 + m.m21);
-        int nx1 = Math.round(m.m00 * x1 + m.m10 * y1 + m.m20);
-        int ny1 = Math.round(m.m01 * x1 + m.m11 * y1 + m.m21);
-        float nscale = scale * m.m00; // m00 is the x-scale (1 for pure slides)
-        original.call(renderState, nscale, translation, rotation, overrideCameraAngle, nx0, ny0, nx1, ny1);
+        // Layering bounds follow the pose; the model's x0..y1 (= its render-texture size) stay exactly as submitted.
+        ScreenRectangle moved = new ScreenRectangle(x0, y0, x1 - x0, y1 - y0).transformMaxBounds(this.pose);
+        ScreenRectangle bounds = scissor != null ? scissor.intersection(moved) : moved;
+        GuiEntityRenderState state = new GuiEntityRenderState(
+                renderState, translation, rotation, overrideCameraAngle, x0, y0, x1, y1, scale, scissor, bounds);
+        PipCapture.put(state, this.pose, ScreenAnimController.fadeAlpha);
+        return state;
     }
 
     // ── opacity: tint the colour every draw type funnels through ──────────────────
@@ -68,9 +85,7 @@ public abstract class GuiGraphicsExtractorMixin {
         return color == null ? null : animatedgui$fade(color);
     }
 
-    @ModifyVariable(
-            method = "innerBlit(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lcom/mojang/blaze3d/textures/GpuTextureView;Lcom/mojang/blaze3d/textures/GpuSampler;IIIIFFFFI)V",
-            at = @At("HEAD"), argsOnly = true, ordinal = 4)
+    @ModifyVariable(method = GfxCompat.INNER_BLIT, at = @At("HEAD"), argsOnly = true, ordinal = 4)
     private int animatedgui$fadeBlit(int color) {
         return animatedgui$fade(color);
     }

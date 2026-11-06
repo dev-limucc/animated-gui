@@ -2,8 +2,9 @@ package dev.limucc.animatedgui.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import dev.limucc.animatedgui.client.anim.Tween;
+import dev.limucc.animatedgui.client.compat.GfxCompat;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
 import net.minecraft.util.Util;
@@ -35,10 +36,10 @@ public abstract class HudMixin {
             method = "extractItemHotbar",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V",
+                    target = GfxCompat.BLIT_SPRITE_CALL,
                     ordinal = 1))
     private void animatedgui$slideSelection(
-            GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h,
+            GuiGraphicsExtractor graphics, @Coerce Object pipeline, Identifier sprite, int x, int y, int w, int h,
             Operation<Void> original) {
         AnimConfig.Feature cfg = AnimConfigManager.get().hotbar;
         if (!cfg.on() || this.minecraft.player == null) {
@@ -67,7 +68,7 @@ public abstract class HudMixin {
                 float t = i / (float) (ghosts + 1);
                 float ghostSlot = startSlot + (animSlot - startSlot) * t;
                 int gx = Math.round(x + (ghostSlot - sel) * 20.0f);
-                graphics.blitSprite(pipeline, sprite, gx, y, w, h, 0.22f * (1.0f - t));
+                GfxCompat.blitSpriteAlpha(graphics, pipeline, sprite, gx, y, w, h, 0.22f * (1.0f - t));
             }
         }
 

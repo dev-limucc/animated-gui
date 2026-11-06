@@ -63,6 +63,11 @@ public enum Easing {
         return apply(t < 0 ? 0 : (t > 1 ? 1 : t));
     }
 
+    /** True for the curves that overshoot / oscillate around the target (replaced by Reduced motion). */
+    public boolean overshoots() {
+        return this == BACK || this == ELASTIC || this == BOUNCE;
+    }
+
     public Easing next() {
         Easing[] v = values();
         return v[(ordinal() + 1) % v.length];

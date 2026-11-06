@@ -3,7 +3,23 @@ plugins {
     id 'maven-publish'
 }
 
-version = project.mod_version
+// ---- multi-version target matrix --------------------------------------------
+// Build one MC target with:  gradlew build "-Ptarget=<key>"      (default: 26.2)
+// Build every target:        .\build-all.ps1                      (jars land in dist\)
+// 'overlays' are extra client source dirs under src/client/versions/ holding the bits that differ
+// between Minecraft eras (26.3 moved RenderPipeline/GpuTextureView/GpuSampler out of com.mojang.blaze3d).
+def TARGETS = [
+    '26.2': [range: '~26.2', loader: '0.19.3', loaderReq: '>=0.19.3', fapi: '0.154.2+26.2', modmenu: '20.0.0',
+             overlays: ['render-blaze3d']],
+    '26.3': [range: '~26.3', loader: '0.20.1', loaderReq: '>=0.20.1', fapi: '0.165.2+26.3', modmenu: '21.0.0',
+             overlays: ['render-pearl']],
+]
+
+def targetVer = (findProperty('target') ?: '26.2').toString()
+def t = TARGETS[targetVer]
+if (t == null) throw new GradleException("Unknown -Ptarget=${targetVer}. Known targets: ${TARGETS.keySet()}")
+
+version = "${project.mod_version}+mc${targetVer}"
 group   = project.maven_group
 
 base {
@@ -21,28 +37,47 @@ loom {
     }
 }
 
+// Client gametest (runClientGameTest): src/gametest. Never packaged into the release jar.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "animatedgui-test"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+// version-specific source overlays (render-API facade + the mixins whose descriptors differ)
+t.overlays.each { sourceSets.client.java.srcDir "src/client/versions/${it}/java" }
+
 repositories {
     mavenCentral()
     maven { url = "https://maven.terraformersmc.com/releases" }
+    maven { url = "https://api.modrinth.com/maven" }
 }
 
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+    minecraft "com.mojang:minecraft:${targetVer}"
+    implementation "net.fabricmc:fabric-loader:${t.loader}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${t.fapi}"
+    implementation "maven.modrinth:modmenu:${t.modmenu}"
 
     // MixinExtras: @ModifyReturnValue / @WrapOperation give precise, low-overhead hot-path injections.
-    // Fabric Loader 0.19.2 bundles MixinExtras at runtime, so we only need it at compile time.
+    // Fabric Loader bundles MixinExtras at runtime, so we only need it at compile time.
     compileOnly "io.github.llamalad7:mixinextras-fabric:${project.mixinextras_version}"
     annotationProcessor "io.github.llamalad7:mixinextras-fabric:${project.mixinextras_version}"
 }
 
 processResources {
-    def version = project.version
-    inputs.property "version", version
+    def props = [
+        version   : project.version.toString(),
+        mc_range  : t.range,
+        loader_req: t.loaderReq,
+    ]
+    inputs.properties props
     filesMatching("fabric.mod.json") {
-        expand "version": version
+        expand props
     }
 }
 

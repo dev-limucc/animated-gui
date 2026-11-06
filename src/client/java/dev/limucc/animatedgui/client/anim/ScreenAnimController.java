@@ -2,11 +2,14 @@ package dev.limucc.animatedgui.client.anim;
 
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
-import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.util.Util;
+import org.joml.Matrix3x2f;
+
+import java.util.HashMap;
 // MenuTransition is in this same package (dev.limucc.animatedgui.client.anim) — no import needed.
 
 /**
@@ -14,14 +17,25 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
  * inventory or the pause menu, vanilla swaps the screen out instantly. We instead keep the outgoing screen
  * alive for a few frames so it can animate away, then perform the real close.
  *
- * <p>All state is global because Minecraft only ever has one active screen at a time.
+ * <p>All state is global because Minecraft only ever has one active screen at a time. Everything here is
+ * allocation-free per frame; time comes from the monotonic {@link Util#getMillis()}.
  */
 public final class ScreenAnimController {
 
     private ScreenAnimController() {}
 
-    private static long openStartMs;
+    /**
+     * Longest slice of real time one rendered frame may advance an open animation by. A heavy first frame (the
+     * creative inventory builds ~45 item models) would otherwise swallow most of the animation in a single hitch.
+     */
+    private static final long MAX_FRAME_STEP_MS = 66L;
+
     private static Screen openScreen;
+    /** False until the open screen has rendered its first frame — that frame is always progress 0. */
+    private static boolean openStarted;
+    /** Open-animation clock: real time accumulated frame by frame, each step capped at {@link #MAX_FRAME_STEP_MS}. */
+    private static long openElapsedMs;
+    private static long openLastFrameMs;
 
     private static boolean closing;
     private static Screen closingScreen;
@@ -40,27 +54,74 @@ public final class ScreenAnimController {
     private static Screen openTransitionScreen;
     /**
      * True only while a screen's open/close pose transform is on the stack. The graphics mixin reads this to
-     * also drag the 3D entity render (the inventory player model) along with the transform — it's a
+     * also carry the 3D entity render (the inventory player model) along with the transform — it's a
      * picture-in-picture that otherwise ignores the 2D pose.
      */
     public static boolean transformActive;
     /**
      * Global opacity multiplier (0..1) applied to the closing/opening menu's draws while a FADE-style transition
-     * is on the stack. 1.0 = fully opaque (no fade). Read by the graphics mixin to tint every fill/blit/text.
+     * is on the stack. 1.0 = fully opaque (no fade). Read by the graphics mixins to tint every fill / blit / text /
+     * item / player model.
      */
     public static float fadeAlpha = 1.0f;
 
-    /** Screens we leave alone — the chat input bar shouldn't scale/slide. */
-    public static boolean animatable(Screen s) {
-        return s != null && !(s instanceof ChatScreen);
+    /** Scratch matrix the render mixin builds each frame's screen transform in (no per-frame allocation). */
+    public static final Matrix3x2f scratch = new Matrix3x2f();
+
+    // ── mouse compensation: the transform currently drawn on screen {@link #compScreen} ──────────────────────
+    private static Screen compScreen;
+    private static float compSx = 1.0f, compSy = 1.0f, compTx, compTy;
+
+    // ── per-screen deny list, answered per class and cached ─────────────────────────────────────────────────
+    private static final HashMap<Class<?>, Boolean> deniedCache = new HashMap<>();
+    private static int deniedCacheVersion = -1;
+
+    /** True when {@code s}'s class is on the user's deny list (fully-qualified or simple name). */
+    public static boolean isDenied(Screen s) {
+        if (s == null) return false;
+        if (AnimConfigManager.get().deniedScreens.isEmpty()) return false;
+        if (deniedCacheVersion != AnimConfigManager.denyVersion()) {
+            deniedCache.clear();
+            deniedCacheVersion = AnimConfigManager.denyVersion();
+        }
+        Class<?> c = s.getClass();
+        Boolean b = deniedCache.get(c);
+        if (b == null) {
+            b = AnimConfigManager.isDenied(c);
+            deniedCache.put(c, b);
+        }
+        return b;
     }
 
-    /** From {@code Minecraft.setScreen}: a screen just became active — begin its open animation. */
+    /** True when the screen that is currently up is on the deny list (used by features that have no screen handle). */
+    public static boolean deniedCurrent() {
+        Minecraft mc = Minecraft.getInstance();
+        return mc != null && isDenied(mc.gui.screen());
+    }
+
+    /** Screens we leave alone — the chat input bar shouldn't scale/slide, and anything the user denied. */
+    public static boolean animatable(Screen s) {
+        return s != null && !(s instanceof ChatScreen) && !isDenied(s);
+    }
+
+    /** From {@code Gui.setScreen} TAIL: a screen just became active — begin its open animation. */
     public static void onScreenAdded(Screen s) {
         if (performingRealClose) return;
-        if (!animatable(s)) { openScreen = null; openTransition = null; openTransitionScreen = null; return; }
+        // Idempotent: a screen that installs its replacement from inside its own init() (the survival inventory
+        // handing off to the creative one) makes the outer setScreen() finish with the replacement already
+        // current. Don't restart the clock of a screen that is already animating in.
+        if (s != null && s == openScreen) return;
+        compScreen = null;
+        if (!animatable(s)) {
+            openScreen = null; openTransition = null; openTransitionScreen = null;
+            return;
+        }
+        if (!isTransient(s)) AnimConfigManager.noteScreen(s.getClass());
         openScreen = s;
-        openStartMs = Util.getMillis();
+        // The clock starts at the first frame this screen actually renders (see beginFrame), not here: init()
+        // and the first render can hitch, and a hitch must not eat the beginning of the animation.
+        openStarted = false;
+        openElapsedMs = 0L;
         closing = false;
         closingScreen = null;
         // Menu→menu navigation: the incoming menu plays the transition's enter motion instead of its open style.
@@ -75,15 +136,44 @@ public final class ScreenAnimController {
     }
 
     /**
-     * From {@code Minecraft.setScreen} HEAD. Returns true if we intercepted the switch (caller must cancel it);
+     * Once per rendered frame of {@code s} (from the render mixin, before it reads any progress): advances the open
+     * clock. The first call only arms the clock, so the first rendered frame is exactly progress 0 and a mispositioned
+     * first frame is never visible.
+     */
+    public static void beginFrame(Screen s) {
+        if (s != openScreen) return;
+        long now = Util.getMillis();
+        if (!openStarted) {
+            openStarted = true;
+            openElapsedMs = 0L;
+        } else {
+            openElapsedMs += Math.min(Math.max(0L, now - openLastFrameMs), MAX_FRAME_STEP_MS);
+        }
+        openLastFrameMs = now;
+    }
+
+    /**
+     * From {@code Gui.setScreen} HEAD. Returns true if we intercepted the switch (caller must cancel it);
      * the outgoing screen stays up to animate out, then {@link #tick} performs the real switch to {@code next}.
      * Covers both closing back to gameplay ({@code next == null}) and menu→menu navigation (e.g. a sub-screen's
      * Back button returning to the title). Loading / connection / teardown screens pass straight through.
      */
     public static boolean interceptClose(Minecraft mc, Screen current, Screen next) {
         if (performingRealClose) { performingRealClose = false; return false; }
+        // {@code current} is assigned before its init() runs, but openScreen only once the whole setScreen() has
+        // finished. So a current screen that isn't openScreen is still inside its own setScreen()/init() and was
+        // never shown: replacing it is a hand-off, not a close. (The survival InventoryScreen does exactly this
+        // when you are in creative — it swaps itself for the CreativeModeInventoryScreen from init(). Deferring
+        // that left the un-initialised survival screen drawn at (0,0) for two ticks: the "top-left pop".)
+        if (current != null && current != openScreen) return false;
+        if (closing) {
+            // Already animating one out. A container's onClose() issues setScreen(null) twice in a row
+            // (player.closeContainer() and then Screen.onClose()); that second call is the same request and must
+            // not cut the exit animation short, so swallow it. A different target (death screen, disconnect, a
+            // new menu) still goes straight through.
+            return next == pendingNext && current == closingScreen;
+        }
         if (!closeConfig(current).on()) return false;
-        if (closing) return false;                            // already animating one out
         if (!animatable(current) || next == current) return false;
         if (isTransient(current) || isTransient(next)) return false; // don't hold/delay system screens
         // Closing to gameplay: don't animate during death/respawn.
@@ -91,7 +181,7 @@ public final class ScreenAnimController {
 
         boolean menuNav = next != null && animatable(next) && !isTransient(next)
                 && !(current instanceof AbstractContainerScreen) && !(next instanceof AbstractContainerScreen);
-        MenuTransition tr = AnimConfigManager.get().menuTransition;
+        MenuTransition tr = AnimConfigManager.get().effectiveMenuTransition();
         if (menuNav && !tr.deferOld()) {
             // SWAP: don't hold the old menu — let setScreen go through, but still play the new menu's enter.
             pendingEnterTransition = tr;
@@ -113,13 +203,14 @@ public final class ScreenAnimController {
         if (!closing) return;
         if (mc.gui.screen() != closingScreen) { closing = false; closingScreen = null; pendingNext = null; return; }
         AnimConfig.ScreenFeature cfg = closeConfig(closingScreen);
-        if (Util.getMillis() - closeStartMs >= cfg.durationMs) {
+        if (Util.getMillis() - closeStartMs >= cfg.effMs()) {
             Screen next = pendingNext;
             closing = false;
             closingScreen = null;
             pendingNext = null;
             menuToMenu = false;
             openScreen = null;
+            compScreen = null;
             performingRealClose = true;
             mc.gui.setScreen(next); // → onScreenAdded picks up pendingEnterTransition for the new menu's enter
         }
@@ -127,7 +218,7 @@ public final class ScreenAnimController {
 
     /** The transition the outgoing menu {@code s} should EXIT with during a menu→menu nav, else null. */
     public static MenuTransition exitTransition(Screen s) {
-        return (menuToMenu && closing && s == closingScreen) ? AnimConfigManager.get().menuTransition : null;
+        return (menuToMenu && closing && s == closingScreen) ? AnimConfigManager.get().effectiveMenuTransition() : null;
     }
 
     /** The transition the freshly-opened menu {@code s} should ENTER with, else null. */
@@ -153,17 +244,16 @@ public final class ScreenAnimController {
      * (fully shown, no transform). The render mixin applies the easing curve on top of this.
      */
     public static float rawProgress(Screen s) {
-        long now = Util.getMillis();
         if (isClosing(s)) {
             AnimConfig.ScreenFeature cfg = configFor(s);
-            float p = 1.0f - (now - closeStartMs) / (float) Math.max(1, cfg.durationMs);
+            float p = 1.0f - (Util.getMillis() - closeStartMs) / (float) Math.max(1, cfg.effMs());
             return clamp01(p);
         }
         if (s == openScreen) {
             AnimConfig.ScreenFeature cfg = configFor(s);
             if (!cfg.on()) return 1.0f;
-            float p = (now - openStartMs) / (float) Math.max(1, cfg.durationMs);
-            return clamp01(p);
+            if (!openStarted) return 0.0f;
+            return clamp01(openElapsedMs / (float) Math.max(1, cfg.effMs()));
         }
         return 1.0f;
     }
@@ -186,5 +276,50 @@ public final class ScreenAnimController {
 
     private static float clamp01(float v) {
         return v < 0 ? 0 : (v > 1 ? 1 : v);
+    }
+
+    // ── mouse compensation ──────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Publish the open/close transform {@code m} that {@code s} is being drawn with this frame. Mouse coordinates
+     * are mapped back through its inverse (see {@link #compX}/{@link #compY}) so hover highlights, tooltips-to-be
+     * and clicks all land on what is actually on screen rather than on where the widgets would sit un-animated.
+     */
+    public static void publishTransform(Screen s, Matrix3x2f m) {
+        compScreen = s;
+        compSx = Math.max(0.01f, m.m00);
+        compSy = Math.max(0.01f, m.m11);
+        compTx = m.m20;
+        compTy = m.m21;
+    }
+
+    /** The screen finished animating (or isn't): input is un-mapped again. */
+    public static void clearTransform() {
+        compScreen = null;
+    }
+
+    /** True while mouse input is being mapped through an animation transform. */
+    public static boolean compensating() {
+        if (compScreen == null) return false;
+        Minecraft mc = Minecraft.getInstance();
+        return mc != null && mc.gui.screen() == compScreen;
+    }
+
+    public static double compX(double x) {
+        return (x - compTx) / compSx;
+    }
+
+    public static double compY(double y) {
+        return (y - compTy) / compSy;
+    }
+
+    /** Forward map of {@link #compX}: where an un-animated x coordinate is drawn right now. */
+    public static double drawnX(double localX) {
+        return localX * compSx + compTx;
+    }
+
+    /** Forward map of {@link #compY}. */
+    public static double drawnY(double localY) {
+        return localY * compSy + compTy;
     }
 }

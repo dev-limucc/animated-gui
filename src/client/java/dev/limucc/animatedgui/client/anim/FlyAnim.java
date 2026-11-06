@@ -15,6 +15,9 @@ public final class FlyAnim {
     /** True when the item merged into an existing stack — animate only a ghost copy, leaving the stack in place. */
     public final boolean merge;
 
+    /** Diagnostics for the gametest: how many glides have been started. */
+    public static int created;
+
     public FlyAnim(int fromX, int fromY, long startMs, int durationMs, Easing easing, boolean merge) {
         this.fromX = fromX;
         this.fromY = fromY;
@@ -22,6 +25,7 @@ public final class FlyAnim {
         this.durationMs = Math.max(1, durationMs);
         this.easing = easing;
         this.merge = merge;
+        created++;
     }
 
     /** Fraction of the source→dest offset still to apply: 1 at the start, 0 once it has landed. */

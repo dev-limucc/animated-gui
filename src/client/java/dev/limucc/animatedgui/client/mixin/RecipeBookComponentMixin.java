@@ -2,6 +2,7 @@ package dev.limucc.animatedgui.client.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.limucc.animatedgui.client.anim.RecipeBookOpenness;
+import dev.limucc.animatedgui.client.anim.ScreenAnimController;
 import dev.limucc.animatedgui.client.anim.Tween;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
@@ -56,7 +57,7 @@ public abstract class RecipeBookComponentMixin implements RecipeBookOpenness {
         AnimConfig.Feature cfg = AnimConfigManager.get().recipeBook;
         long now = Util.getMillis();
 
-        if (!cfg.on()) {
+        if (!cfg.on() || ScreenAnimController.deniedCurrent()) {
             animatedgui$open.snap(target);
             animatedgui$openness = target;
             animatedgui$openInit = true;

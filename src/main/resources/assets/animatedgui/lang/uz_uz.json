@@ -1,0 +1,39 @@
+{
+  "animatedgui.title": "Animated GUI",
+  "animatedgui.settings": "sozlamalar",
+  "animatedgui.done": "Tayyor",
+
+  "animatedgui.tab.general": "Umumiy",
+  "animatedgui.tab.inventory": "Inventar",
+  "animatedgui.tab.menu": "O'yin menyusi",
+  "animatedgui.tab.chat": "Chat",
+  "animatedgui.tab.screens": "Oynalar",
+
+  "animatedgui.row.master": "Asosiy",
+  "animatedgui.row.reduced": "Kam harakat",
+  "animatedgui.row.hotbar": "Hotbar",
+  "animatedgui.row.trail": "Iz",
+  "animatedgui.row.listscroll": "Ro'yxat",
+  "animatedgui.row.items": "Buyumlar",
+  "animatedgui.row.creative": "Kreativ",
+  "animatedgui.row.recipe": "Retseptlar",
+  "animatedgui.row.invopen": "Inv ochish",
+  "animatedgui.row.invclose": "Inv yopish",
+  "animatedgui.row.menuopen": "Menyu ochish",
+  "animatedgui.row.menuclose": "Menyu yopish",
+  "animatedgui.row.chat": "Chat",
+  "animatedgui.row.transition": "O'tish",
+
+  "animatedgui.yielded": "O'chiq: %s o'rnatilgan",
+
+  "animatedgui.info.reduced": "Kam harakat: oynalar faqat so'nadi (100 ms gacha).",
+  "animatedgui.info.chat1": "Yangi chat xabarlari birdan chiqmasdan,",
+  "animatedgui.info.chat2": "pastdan silliq ko'tariladi.",
+  "animatedgui.info.inv1": "Uyacha, kreativ aylantirish, retseptlar va",
+  "animatedgui.info.inv2": "inventar ochilish/yopilish animatsiyalari.",
+  "animatedgui.info.menu": "Pauza menyusi, sozlamalar, bosh menyu va boshqalar.",
+
+  "animatedgui.screens.hint": "Animatsiyani to'xtatish uchun oynani o'chiring.",
+  "animatedgui.screens.empty1": "Hali oyna ko'rilmadi. O'yinda bir nechta",
+  "animatedgui.screens.empty2": "menyuni oching, ular shu yerda chiqadi."
+}

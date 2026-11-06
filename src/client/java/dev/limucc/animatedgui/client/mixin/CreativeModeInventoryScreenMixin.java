@@ -1,6 +1,7 @@
 package dev.limucc.animatedgui.client.mixin;
 
 import dev.limucc.animatedgui.client.anim.CreativeScroll;
+import dev.limucc.animatedgui.client.anim.ScreenAnimController;
 import dev.limucc.animatedgui.client.anim.Tween;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
@@ -54,7 +55,7 @@ public abstract class CreativeModeInventoryScreenMixin {
         int rowCount = Math.max(0, animatedgui$ceilDiv(menu.items.size()) - CreativeScroll.ROWS);
         CreativeScroll.container = CONTAINER; // always, so grid slots can be identified even when not sliding
 
-        if (!cfg.on() || !this.canScroll() || rowCount <= 0) {
+        if (!cfg.on() || !this.canScroll() || rowCount <= 0 || ScreenAnimController.isDenied((net.minecraft.client.gui.screens.Screen) (Object) this)) {
             CreativeScroll.clear();
             animatedgui$row.snap(rowCount > 0 ? this.scrollOffs * rowCount : 0.0f);
             animatedgui$lastScrollOffs = this.scrollOffs;

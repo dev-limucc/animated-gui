@@ -50,6 +50,11 @@ public enum ScreenStyle {
         @Override public void apply(Matrix3x2f pose, float p, int w, int h) {
             pose.translate(-(1.0f - p) * w * 0.85f, 0.0f);
         }
+    },
+    /** Pure opacity, zero movement. This is what "Reduced motion" swaps every screen style for. */
+    STILL_FADE("Still fade") {
+        @Override public void apply(Matrix3x2f pose, float p, int w, int h) { /* no movement at all */ }
+        @Override public boolean fades() { return true; }
     };
 
     private final String label;

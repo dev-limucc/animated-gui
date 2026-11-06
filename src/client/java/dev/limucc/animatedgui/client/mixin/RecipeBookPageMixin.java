@@ -1,5 +1,6 @@
 package dev.limucc.animatedgui.client.mixin;
 
+import dev.limucc.animatedgui.client.anim.ScreenAnimController;
 import dev.limucc.animatedgui.client.config.AnimConfig;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -38,7 +39,7 @@ public abstract class RecipeBookPageMixin {
             animatedgui$lastPage = this.currentPage;
         }
         AnimConfig.Feature cfg = AnimConfigManager.get().recipeBook;
-        if (!cfg.on() || animatedgui$pageDir == 0) return;
+        if (!cfg.on() || animatedgui$pageDir == 0 || ScreenAnimController.deniedCurrent()) return;
         float t = (Util.getMillis() - animatedgui$pageMs) / (float) Math.max(1, cfg.durationMs);
         if (t < 0.0f || t >= 1.0f) return;
         float p = cfg.easing.apply(t);

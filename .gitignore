@@ -24,3 +24,4 @@ eclipse/
 
 # gallery: keep the screenshot + animated webp showcases, skip the large raw captures
 Gallery/*.mp4
+dist/

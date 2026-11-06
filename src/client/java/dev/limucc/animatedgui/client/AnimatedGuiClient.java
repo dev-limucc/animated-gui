@@ -4,6 +4,7 @@ import dev.limucc.animatedgui.AnimatedGui;
 import dev.limucc.animatedgui.client.anim.ScreenAnimController;
 import dev.limucc.animatedgui.client.config.AnimConfigManager;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
 /**
@@ -17,6 +18,8 @@ public class AnimatedGuiClient implements ClientModInitializer {
     public void onInitializeClient() {
         AnimConfigManager.load();
         ClientTickEvents.END_CLIENT_TICK.register(ScreenAnimController::tick);
+        // screens seen / deny-list edits are written lazily; flush them on exit
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> AnimConfigManager.saveIfDirty());
         AnimatedGui.LOGGER.info("Animated GUI loaded — smoothing out Minecraft's instant menus.");
         for (String t : new String[]{
                 "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen",
@@ -25,7 +28,9 @@ public class AnimatedGuiClient implements ClientModInitializer {
                 "net.minecraft.client.gui.components.AbstractSelectionList",
                 "net.minecraft.client.gui.screens.recipebook.RecipeBookComponent",
                 "net.minecraft.client.gui.screens.recipebook.RecipeBookPage",
-                "net.minecraft.client.gui.GuiGraphicsExtractor"}) {
+                "net.minecraft.client.gui.GuiGraphicsExtractor",
+                "net.minecraft.client.gui.render.pip.PictureInPictureRenderer",
+                "net.minecraft.client.MouseHandler"}) {
             try { Class.forName(t, false, getClass().getClassLoader()); AnimatedGui.LOGGER.info("[validate] {} OK", t); }
             catch (Throwable e) { AnimatedGui.LOGGER.error("[validate] {} FAILED", t, e); }
         }

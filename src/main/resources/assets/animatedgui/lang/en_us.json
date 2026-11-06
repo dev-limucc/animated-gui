@@ -1,0 +1,39 @@
+{
+  "animatedgui.title": "Animated GUI",
+  "animatedgui.settings": "settings",
+  "animatedgui.done": "Done",
+
+  "animatedgui.tab.general": "General",
+  "animatedgui.tab.inventory": "Inventory",
+  "animatedgui.tab.menu": "Game menu",
+  "animatedgui.tab.chat": "Chat",
+  "animatedgui.tab.screens": "Screens",
+
+  "animatedgui.row.master": "Master",
+  "animatedgui.row.reduced": "Reduced motion",
+  "animatedgui.row.hotbar": "Hotbar",
+  "animatedgui.row.trail": "Trail",
+  "animatedgui.row.listscroll": "List scroll",
+  "animatedgui.row.items": "Items",
+  "animatedgui.row.creative": "Creative",
+  "animatedgui.row.recipe": "Recipe book",
+  "animatedgui.row.invopen": "Inv open",
+  "animatedgui.row.invclose": "Inv close",
+  "animatedgui.row.menuopen": "Menu open",
+  "animatedgui.row.menuclose": "Menu close",
+  "animatedgui.row.chat": "Chat",
+  "animatedgui.row.transition": "Transition",
+
+  "animatedgui.yielded": "Off: %s is installed",
+
+  "animatedgui.info.reduced": "Reduced motion: screens only fade (max 100 ms).",
+  "animatedgui.info.chat1": "New chat messages slide up smoothly as they",
+  "animatedgui.info.chat2": "arrive, instead of popping in instantly.",
+  "animatedgui.info.inv1": "Slot, creative-scroll, recipe-book and the",
+  "animatedgui.info.inv2": "inventory open/close animations.",
+  "animatedgui.info.menu": "Pause menu, options, title and other menus.",
+
+  "animatedgui.screens.hint": "Switch a screen off to stop it animating.",
+  "animatedgui.screens.empty1": "No screens seen yet. Open a few menus in-game",
+  "animatedgui.screens.empty2": "and they will be listed here."
+}
