@@ -6,7 +6,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 /**
  * Detects other mods that already animate the same thing and makes the overlapping Animated GUI feature step
- * aside (never the whole mod): installing Smooth Swapping turns off our item glide, installing Smooth Scrolling
+ * aside (never the whole mod): installing Smooth Swapping turns off our item glide, Smooth Hover our slot-hover fade, installing Smooth Scrolling
  * (either flavour) turns off our list scroll — and the creative-grid slide too for the original Smooth Scrolling,
  * which owns that grid. The settings screen shows which feature yielded to which mod. Pure runtime detection:
  * no dependency on any of them.
@@ -17,12 +17,14 @@ public final class ModCompat {
 
     /** Fabric mod ids. */
     private static final String SMOOTH_SWAPPING = "smoothswapping";
+    private static final String SMOOTH_HOVER = "smooth_hover";
     private static final String SMOOTH_SCROLLING = "smoothscroll";
     private static final String SMOOTH_SCROLLING_REFURBISHED = "smoothscrollingrefurbished";
 
     public static void apply(AnimConfig cfg) {
         FabricLoader loader = FabricLoader.getInstance();
         cfg.items.yieldedTo = loader.isModLoaded(SMOOTH_SWAPPING) ? "Smooth Swapping" : null;
+        cfg.hoverFade.yieldedTo = loader.isModLoaded(SMOOTH_HOVER) ? "Smooth Hover" : null;
 
         String scrolling = null;
         if (loader.isModLoaded(SMOOTH_SCROLLING)) scrolling = "Smooth Scrolling";
@@ -30,9 +32,9 @@ public final class ModCompat {
         cfg.listScroll.yieldedTo = scrolling;
         cfg.creativeScroll.yieldedTo = loader.isModLoaded(SMOOTH_SCROLLING) ? "Smooth Scrolling" : null;
 
-        if (cfg.items.yieldedTo != null || scrolling != null) {
-            AnimatedGui.LOGGER.info("[Animated GUI] Yielding to installed mods: items={}, listScroll={}, creativeScroll={}",
-                    cfg.items.yieldedTo, cfg.listScroll.yieldedTo, cfg.creativeScroll.yieldedTo);
+        if (cfg.items.yieldedTo != null || scrolling != null || cfg.hoverFade.yieldedTo != null) {
+            AnimatedGui.LOGGER.info("[Animated GUI] Yielding to installed mods: items={}, listScroll={}, creativeScroll={}, hoverFade={}",
+                    cfg.items.yieldedTo, cfg.listScroll.yieldedTo, cfg.creativeScroll.yieldedTo, cfg.hoverFade.yieldedTo);
         }
     }
 }

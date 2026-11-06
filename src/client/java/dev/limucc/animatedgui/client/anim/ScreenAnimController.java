@@ -65,6 +65,16 @@ public final class ScreenAnimController {
      */
     public static float fadeAlpha = 1.0f;
 
+    /**
+     * Strength (0..1) the menu background blur should be drawn with this frame; the screen mixin sets it while the
+     * screen's blur is queued and the game renderer consumes (and resets) it when it applies the blur radius.
+     */
+    public static float blurFactor = 1.0f;
+    /** Diagnostics for the gametest: how many frames the blur radius was actually scaled down. */
+    public static int blurScaled;
+    /** Diagnostics for the gametest: how many frames a fading-out slot highlight was drawn. */
+    public static int hoverCrossfades;
+
     /** Scratch matrix the render mixin builds each frame's screen transform in (no per-frame allocation). */
     public static final Matrix3x2f scratch = new Matrix3x2f();
 
@@ -224,6 +234,20 @@ public final class ScreenAnimController {
     /** The transition the freshly-opened menu {@code s} should ENTER with, else null. */
     public static MenuTransition enterTransition(Screen s) {
         return (openTransition != null && s == openTransitionScreen && s == openScreen) ? openTransition : null;
+    }
+
+    /**
+     * How strongly the dim / blur behind {@code s} should be drawn right now (0..1). It follows the screen's own
+     * eased open/close progress, except during a menu-to-menu transition where both menus share one backdrop and it
+     * must not flicker. Read-only: it never advances the open clock.
+     */
+    public static float backdropFactor(Screen s) {
+        AnimConfig c = AnimConfigManager.get();
+        if (!c.backdropFade || !c.masterEnabled || s == null) return 1.0f;
+        if (exitTransition(s) != null || enterTransition(s) != null) return 1.0f;
+        float raw = rawProgress(s);
+        if (raw >= 1.0f) return 1.0f;
+        return clamp01(configFor(s).effEasing().apply(raw));
     }
 
     /** Loading / connection / world-teardown screens we must not hold up or render over. */

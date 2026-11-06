@@ -131,12 +131,14 @@ public class AnimatedGuiScreen extends Screen {
             case GENERAL -> {
                 rows.add(boolRow("animatedgui.row.master", true, () -> c.masterEnabled, v -> c.masterEnabled = v));
                 rows.add(boolRow("animatedgui.row.reduced", false, () -> c.reducedMotion, v -> c.reducedMotion = v));
+                rows.add(boolRow("animatedgui.row.backdrop", false, () -> c.backdropFade, v -> c.backdropFade = v));
                 rows.add(featRow("animatedgui.row.hotbar", c.hotbar, false));
                 rows.add(boolRow("animatedgui.row.trail", false, () -> c.hotbarTrail, v -> c.hotbarTrail = v));
                 rows.add(featRow("animatedgui.row.listscroll", c.listScroll, false));
             }
             case INVENTORY -> {
                 rows.add(featRow("animatedgui.row.items", c.items, false));
+                rows.add(featRow("animatedgui.row.hover", c.hoverFade, false));
                 rows.add(featRow("animatedgui.row.creative", c.creativeScroll, false));
                 rows.add(featRow("animatedgui.row.recipe", c.recipeBook, false));
                 rows.add(featRow("animatedgui.row.invopen", c.inventoryOpen, true));

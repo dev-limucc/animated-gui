@@ -103,7 +103,7 @@ public class AnimatedGuiGameTest implements FabricClientGameTest {
             AnimConfig d = new AnimConfig();
             c.masterEnabled = true; c.reducedMotion = false;
             c.hotbar = d.hotbar; c.hotbarTrail = false; c.listScroll = d.listScroll; c.chat = d.chat;
-            c.items = d.items; c.creativeScroll = d.creativeScroll; c.recipeBook = d.recipeBook;
+            c.items = d.items; c.hoverFade = d.hoverFade; c.creativeScroll = d.creativeScroll; c.recipeBook = d.recipeBook;
             c.inventoryOpen = d.inventoryOpen; c.inventoryClose = d.inventoryClose;
             c.menuOpen = d.menuOpen; c.menuClose = d.menuClose; c.menuTransition = d.menuTransition;
             c.deniedScreens.clear();
@@ -173,6 +173,7 @@ public class AnimatedGuiGameTest implements FabricClientGameTest {
             ctx.takeScreenshot("00-world-baseline");
 
             survivalInventory(ctx, seen);
+            hoverFade(ctx);
             itemGlide(ctx);
             containers(ctx, world);
             pauseAndOptions(ctx);
@@ -184,6 +185,43 @@ public class AnimatedGuiGameTest implements FabricClientGameTest {
             creative(ctx, world, seen);
         }
         System.out.println("[AGUI-GAMETEST] ALL DONE");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
+    static double[] slotCenter(ClientGameTestContext ctx, int index) {
+        return ctx.computeOnClient(mc -> {
+            AbstractContainerScreen<?> s = (AbstractContainerScreen<?>) mc.gui.screen();
+            Slot sl = s.getMenu().getSlot(index);
+            return new double[]{leftPos(s) + sl.x + 8, topPos(s) + sl.y + 8};
+        });
+    }
+
+    private void hoverFade(ClientGameTestContext ctx) {
+        info("== slot hover cross-fade ==");
+        resetCfg(ctx);
+        ctx.runOnClient(mc -> {
+            AnimConfig c = AnimConfigManager.get();
+            c.inventoryOpen.durationMs = 40; c.inventoryClose.durationMs = 40;
+            c.hoverFade.durationMs = 1500; c.hoverFade.easing = Easing.LINEAR;
+        });
+        pressInventoryKey(ctx);
+        ctx.waitForScreen(InventoryScreen.class);
+        ctx.waitTicks(12);
+        double[] a = slotCenter(ctx, 36), b = slotCenter(ctx, 37);
+        cursorGui(ctx, a[0], a[1]);
+        ctx.waitTicks(2);
+        int before = ScreenAnimController.hoverCrossfades;
+        cursorGui(ctx, b[0], b[1]);
+        ctx.waitTicks(3);
+        ctx.takeScreenshot("16-slot-hover-crossfade-mid");
+        check(ScreenAnimController.hoverCrossfades > before,
+                "moving between slots cross-fades the highlight (" + (ScreenAnimController.hoverCrossfades - before) + " fade-out draws)");
+        ctx.runOnClient(mc -> AnimConfigManager.get().hoverFade.enabled = false);
+        int off = ScreenAnimController.hoverCrossfades;
+        cursorGui(ctx, a[0], a[1]);
+        ctx.waitTicks(3);
+        check(ScreenAnimController.hoverCrossfades == off, "hover fade switched off -> vanilla highlight only");
+        closeScreenFast(ctx);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -252,6 +290,12 @@ public class AnimatedGuiGameTest implements FabricClientGameTest {
         check(raw > 0.05f && raw < 0.95f, "open animation is mid-flight (raw=" + raw + ")");
         check(PipCapture.puts > putsBefore, "player-model PiP pose captured while animating (puts +" + (PipCapture.puts - putsBefore) + ")");
         check(ctx.computeOnClient(mc -> ScreenAnimController.compensating()), "mouse mapping is active mid-animation");
+        float dim = ctx.computeOnClient(mc -> ScreenAnimController.backdropFactor(mc.gui.screen()));
+        check(dim > 0.02f && dim < 0.98f, "the dim behind the inventory fades with the screen (factor=" + dim + ")");
+        ctx.runOnClient(mc -> AnimConfigManager.get().backdropFade = false);
+        check(ctx.computeOnClient(mc -> ScreenAnimController.backdropFactor(mc.gui.screen())) == 1.0f,
+                "dim/blur fade switch off -> backdrop stays at full strength");
+        ctx.runOnClient(mc -> AnimConfigManager.get().backdropFade = true);
 
         closeScreenFast(ctx);
 
@@ -431,10 +475,16 @@ public class AnimatedGuiGameTest implements FabricClientGameTest {
             c.menuOpen.durationMs = 1500; c.menuOpen.easing = Easing.LINEAR; c.menuOpen.style = ScreenStyle.FADE;
             c.menuClose.durationMs = 1500; c.menuClose.easing = Easing.LINEAR; c.menuClose.style = ScreenStyle.FADE;
         });
+        int blurBefore = ctx.computeOnClient(mc -> mc.options.getMenuBackgroundBlurriness());
+        ctx.runOnClient(mc -> mc.options.menuBackgroundBlurriness().set(8));
+        int scaledBefore = ScreenAnimController.blurScaled;
         ctx.getInput().pressKey(InputConstants.KEY_ESCAPE);
         ctx.waitForScreen(PauseScreen.class);
         ctx.waitTicks(8);
         ctx.takeScreenshot("40-pause-open-FADE-mid");
+        check(ScreenAnimController.blurScaled > scaledBefore,
+                "the pause-menu blur radius is scaled down while the menu fades in (" + (ScreenAnimController.blurScaled - scaledBefore) + " frames)");
+        ctx.runOnClient(mc -> mc.options.menuBackgroundBlurriness().set(blurBefore));
         float raw = ctx.computeOnClient(mc -> ScreenAnimController.rawProgress(mc.gui.screen()));
         check(raw > 0.02f && raw < 0.98f, "pause menu animates open (raw=" + raw + ")");
         ctx.waitTicks(40);

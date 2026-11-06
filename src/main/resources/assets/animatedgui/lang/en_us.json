@@ -11,10 +11,12 @@
 
   "animatedgui.row.master": "Master",
   "animatedgui.row.reduced": "Reduced motion",
+  "animatedgui.row.backdrop": "Dim / blur fade",
   "animatedgui.row.hotbar": "Hotbar",
   "animatedgui.row.trail": "Trail",
   "animatedgui.row.listscroll": "List scroll",
   "animatedgui.row.items": "Items",
+  "animatedgui.row.hover": "Slot hover fade",
   "animatedgui.row.creative": "Creative",
   "animatedgui.row.recipe": "Recipe book",
   "animatedgui.row.invopen": "Inv open",

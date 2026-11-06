@@ -24,6 +24,12 @@ public class AnimConfig {
      */
     public boolean reducedMotion = false;
 
+    /**
+     * The screen dim (inventories) and the menu blur (pause / options) fade in and out with the screen instead of
+     * snapping to full strength the moment it opens. Pure opacity, so it stays on under Reduced motion.
+     */
+    public boolean backdropFade = true;
+
     /** Longest any screen animation may run while {@link #reducedMotion} is on. */
     public static final int REDUCED_MAX_MS = 100;
 
@@ -40,6 +46,8 @@ public class AnimConfig {
     public Feature items = new Feature(true, 200, Easing.EASE_OUT).motion();          // item glide between slots
     public Feature creativeScroll = new Feature(true, 220, Easing.EASE_OUT).motion();
     public Feature recipeBook = new Feature(true, 220, Easing.EASE_OUT).motion();     // book slide + inventory shift + paging
+    /** Cross-fade of the slot highlight between hovered slots (opacity only, so it is not a "motion" feature). */
+    public Feature hoverFade = new Feature(true, 90, Easing.EASE_OUT);
     public ScreenFeature inventoryOpen = new ScreenFeature(true, 220, Easing.EASE_OUT, ScreenStyle.SCALE);
     public ScreenFeature inventoryClose = new ScreenFeature(true, 220, Easing.EASE_IN_OUT, ScreenStyle.SLIDE_UP);
 
@@ -136,11 +144,12 @@ public class AnimConfig {
         if (items == null) items = new Feature(true, 200, Easing.EASE_OUT);
         if (creativeScroll == null) creativeScroll = new Feature(true, 220, Easing.EASE_OUT);
         if (recipeBook == null) recipeBook = new Feature(true, 220, Easing.EASE_OUT);
+        if (hoverFade == null) hoverFade = new Feature(true, 90, Easing.EASE_OUT);
         if (inventoryOpen == null) inventoryOpen = new ScreenFeature(true, 220, Easing.EASE_OUT, ScreenStyle.SCALE);
         if (inventoryClose == null) inventoryClose = new ScreenFeature(true, 220, Easing.EASE_IN_OUT, ScreenStyle.SLIDE_UP);
         if (menuOpen == null) menuOpen = new ScreenFeature(true, 200, Easing.EASE_OUT, ScreenStyle.FADE);
         if (menuClose == null) menuClose = new ScreenFeature(true, 200, Easing.EASE_IN_OUT, ScreenStyle.FADE);
-        for (Feature f : new Feature[]{hotbar, listScroll, chat, items, creativeScroll, recipeBook,
+        for (Feature f : new Feature[]{hotbar, listScroll, chat, items, creativeScroll, recipeBook, hoverFade,
                 inventoryOpen, inventoryClose, menuOpen, menuClose}) {
             if (f.easing == null) f.easing = Easing.EASE_OUT;
             f.durationMs = Math.max(20, Math.min(2000, f.durationMs));

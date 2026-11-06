@@ -46,6 +46,26 @@ public abstract class ScreenMixin {
     @Unique private boolean animatedgui$animating;
     @Unique private static boolean animatedgui$warnedTextureView;
 
+    /**
+     * The dim behind an inventory-style screen follows the screen's open/close progress: while it is drawn, the
+     * opacity funnel in {@code GuiGraphicsExtractorMixin} (fill / gradient) scales it by the backdrop factor.
+     */
+    @Inject(method = "extractTransparentBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V", at = @At("HEAD"))
+    private void animatedgui$dimIn(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+        ScreenAnimController.fadeAlpha = ScreenAnimController.backdropFactor((Screen) (Object) this);
+    }
+
+    @Inject(method = "extractTransparentBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V", at = @At("RETURN"))
+    private void animatedgui$dimOut(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+        ScreenAnimController.fadeAlpha = 1.0f;
+    }
+
+    /** The blurred menu background: tell the game renderer how strong this frame's blur should be. */
+    @Inject(method = "extractBlurredBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V", at = @At("HEAD"))
+    private void animatedgui$blurFactor(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+        ScreenAnimController.blurFactor = ScreenAnimController.backdropFactor((Screen) (Object) this);
+    }
+
     /** Set when the transform was pushed from inside {@code Screen.extractBackground} this frame. */
     @Unique private boolean animatedgui$applied;
 

@@ -1,5 +1,6 @@
 package dev.limucc.animatedgui.client.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -53,6 +54,7 @@ import java.util.Map;
 public abstract class AbstractContainerScreenMixin {
 
     @Shadow @Final protected AbstractContainerMenu menu;
+    @Shadow protected Slot hoveredSlot;
 
     @Unique private static final long SOURCE_WINDOW_MS = 400L;
 
@@ -62,6 +64,11 @@ public abstract class AbstractContainerScreenMixin {
     @Unique private int[] animatedgui$snapCount = new int[0];
     @Unique private int[] animatedgui$changed = new int[0];
     @Unique private boolean animatedgui$tracking;
+
+    /** Slot highlight cross-fade: the slot the cursor is on, the one it just left, and when the hover changed. */
+    @Unique private Slot animatedgui$hvCur;
+    @Unique private Slot animatedgui$hvPrev;
+    @Unique private long animatedgui$hvSince;
 
     @Unique private final Map<Slot, FlyAnim> animatedgui$flying = new IdentityHashMap<>();
     @Unique private final List<SlotSource> animatedgui$recentSources = new ArrayList<>();
@@ -190,6 +197,65 @@ public abstract class AbstractContainerScreenMixin {
         ItemStack stack = slot.getItem();
         if (!stack.isEmpty()) {
             animatedgui$recentSources.add(new SlotSource(stack.getItem(), slot.x, slot.y, Util.getMillis()));
+        }
+    }
+
+    // ── slot highlight cross-fade ────────────────────────────────────────────────────────────────────────────
+    // Vanilla snaps the highlight to the hovered slot. We draw the slot the cursor just left fading out and the new
+    // one fading in, by re-running the vanilla highlight draw with the hovered slot swapped and the opacity funnel
+    // (see GuiGraphicsExtractorMixin) scaled. Allocation-free; no sprite knowledge needed.
+
+    @WrapMethod(method = "extractSlotHighlightBack")
+    private void animatedgui$hoverBack(GuiGraphicsExtractor graphics, Operation<Void> original) {
+        animatedgui$hover(graphics, original);
+    }
+
+    @WrapMethod(method = "extractSlotHighlightFront")
+    private void animatedgui$hoverFront(GuiGraphicsExtractor graphics, Operation<Void> original) {
+        animatedgui$hover(graphics, original);
+    }
+
+    @Unique
+    private void animatedgui$hover(GuiGraphicsExtractor graphics, Operation<Void> original) {
+        AnimConfig.Feature cfg = AnimConfigManager.get().hoverFade;
+        Screen self = (Screen) (Object) this;
+        if (!cfg.on() || ScreenAnimController.isDenied(self)) {
+            animatedgui$hvCur = null;
+            animatedgui$hvPrev = null;
+            original.call(graphics);
+            return;
+        }
+        long now = Util.getMillis();
+        Slot cur = this.hoveredSlot;
+        if (cur != animatedgui$hvCur) {
+            animatedgui$hvPrev = animatedgui$hvCur;
+            animatedgui$hvCur = cur;
+            animatedgui$hvSince = now;
+        }
+        float t = Math.min(1.0f, (now - animatedgui$hvSince) / (float) Math.max(1, cfg.durationMs));
+        if (t >= 1.0f) {
+            animatedgui$hvPrev = null;
+            original.call(graphics);
+            return;
+        }
+        float e = cfg.easing.apply(t);
+        float base = ScreenAnimController.fadeAlpha;
+        try {
+            Slot prev = animatedgui$hvPrev;
+            if (prev != null) {
+                this.hoveredSlot = prev;
+                ScreenAnimController.fadeAlpha = base * (1.0f - e);
+                ScreenAnimController.hoverCrossfades++;
+                original.call(graphics);
+            }
+            if (cur != null) {
+                this.hoveredSlot = cur;
+                ScreenAnimController.fadeAlpha = base * e;
+                original.call(graphics);
+            }
+        } finally {
+            this.hoveredSlot = cur;
+            ScreenAnimController.fadeAlpha = base;
         }
     }
 

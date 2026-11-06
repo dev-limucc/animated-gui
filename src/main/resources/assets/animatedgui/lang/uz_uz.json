@@ -11,10 +11,12 @@
 
   "animatedgui.row.master": "Asosiy",
   "animatedgui.row.reduced": "Kam harakat",
+  "animatedgui.row.backdrop": "Xira / loyqa so'nishi",
   "animatedgui.row.hotbar": "Hotbar",
   "animatedgui.row.trail": "Iz",
   "animatedgui.row.listscroll": "Ro'yxat",
   "animatedgui.row.items": "Buyumlar",
+  "animatedgui.row.hover": "Katak ajratilishi",
   "animatedgui.row.creative": "Kreativ",
   "animatedgui.row.recipe": "Retseptlar",
   "animatedgui.row.invopen": "Inv ochish",

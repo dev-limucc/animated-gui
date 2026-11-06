@@ -19,7 +19,8 @@
     "GuiItemRenderStateMixin",
     "GuiRendererMixin",
     "PictureInPictureRendererMixin",
-    "MouseHandlerMixin"
+    "MouseHandlerMixin",
+    "GameRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
