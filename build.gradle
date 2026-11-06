@@ -69,6 +69,25 @@ dependencies {
     annotationProcessor "io.github.llamalad7:mixinextras-fabric:${project.mixinextras_version}"
 }
 
+// ---- production run: launch the BUILT jar in a real (non-dev) client -----------------------------------------
+// gradlew runProductionClient "-Ptarget=26.2" ["-PprodWorld=<save folder under build/run/production/saves>"]   (close the window yourself)
+configurations {
+    productionMods { transitive = false }
+}
+dependencies {
+    productionMods "net.fabricmc.fabric-api:fabric-api:${t.fapi}"
+}
+tasks.register('runProductionClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    dependsOn tasks.named('jar')
+    mods.from(configurations.productionMods)
+    mods.from(tasks.named('jar').flatMap { it.archiveFile })
+    minecraftVersion = targetVer
+    runDir = layout.buildDirectory.dir('run/production')
+    if (findProperty('prodWorld')) {
+        programArgs.addAll('--quickPlaySingleplayer', findProperty('prodWorld').toString())
+    }
+}
+
 processResources {
     def props = [
         version   : project.version.toString(),

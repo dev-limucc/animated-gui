@@ -1,6 +1,7 @@
 # Builds Animated GUI for every supported Minecraft version and collects the jars into dist\
 # Usage:  .\build-all.ps1
-$ErrorActionPreference = "Stop"
+# gradlew prints a harmless JVM warning on stderr; do not let PowerShell turn that into a terminating error.
+$ErrorActionPreference = "Continue"
 
 # ALWAYS force the ATLauncher JDK 25: the system-wide JAVA_HOME may be an older JDK that cannot compile 26.x targets.
 $env:JAVA_HOME = "C:\Users\Windows 11\AppData\Roaming\ATLauncher\runtimes\minecraft\java-runtime-epsilon\windows-x64\java-runtime-epsilon"
